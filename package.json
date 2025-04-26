@@ -17,8 +17,9 @@
     "build": "npm run build-dev && npm run release-clean-up-dist && npm run release-minify-html",
     "start-dev": "nodemon --watch . --exec 'http-server dist -p 9999 -c no-store'",
     "start-release": "http-server dist -p 8080 -d false",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "release": "rm -rf release && mkdir -p release && cp -R dist/* release/",
+    "predeploy": "npm run build && npm run release",
+    "deploy": "gh-pages -d release"
   },
   "private": true,
   "license": "MIT",
