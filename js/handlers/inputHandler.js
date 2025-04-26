@@ -108,16 +108,3 @@ function handleTab(terminalInput) {
     console.log("Suggestions:", suggestions.join(", "));
   }
 }
-
-function getAutocompleteSuggestions(inputText) {
-  const availableCommands = [
-    "help",
-    "date",
-    "clear",
-    "about",
-  ];
-
-  return availableCommands.filter((command) => {
-    return command.startsWith(inputText.toLowerCase());
-  });
-}
