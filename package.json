@@ -15,7 +15,7 @@
     "release-minify-html": "minify src/index.html > dist/index.html",
     "build-dev": "npm run common-startup && npm run common-convert-sass && npm run common-minify-css",
     "build": "npm run build-dev && npm run release-clean-up-dist && npm run release-minify-html",
-    "start-dev": "nodemon --watch . --exec 'http-server dist -p 9999 -c no-store'",
+    "start-dev": "nodemon --watch . --exec 'http-server dist -p 8888 -c no-store'",
     "start-release": "http-server dist -p 8080 -d false",
     "release": "rm -rf release && mkdir -p release && cp -R dist/* release/",
     "predeploy": "npm run build && npm run release",

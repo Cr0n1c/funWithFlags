@@ -1,6 +1,14 @@
-export const now = new Date();
 export const pad = (n) => String(n).padStart(2, '0');
-export const formattedTime = `${pad(now.getMonth() + 1)}/${pad(now.getDate())}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+// CMOS failure simulation
+const cmosFailed = Math.random() < 0.5;
+
+// Use UTC now or UTC epoch
+const now = new Date();
+const currentDate = cmosFailed ? new Date(0) : now;
+
+// formattedTime using UTC fields
+export const formattedTime = `${pad(currentDate.getUTCMonth() + 1)}/${pad(currentDate.getUTCDate())}/${currentDate.getUTCFullYear()} ${pad(currentDate.getUTCHours())}:${pad(currentDate.getUTCMinutes())}:${pad(currentDate.getUTCSeconds())}`;
 
 // Banner text ascii art
 export const banner = `
@@ -14,9 +22,9 @@ export const banner = `
     > Network Test ....................... OK
     > Parallel Port ...................... OK
     > Serial Port ........................ OK
-    > CMOS Battery ....................... FAILED
+    > CMOS Battery ....................... ${cmosFailed ? 'FAILED' : 'OK'}
     > Loading boot sector ................ OK
-
+    ${cmosFailed ? `\n    Warning: System clock reset to default factory settings.\n` : ''}
     Booting from drive A...
     Starting MS-DOS (dbt Edition)...
 
@@ -25,7 +33,7 @@ export const banner = `
     > 256K extended memory OK
     > 1024K extended memory OK
 
-    System clock synchronized to ${formattedTime}
+    System clock synchronized to ${cmosFailed ? '01/01/1970 00:00:00' : formattedTime}
 
     .......................................................................................
 
