@@ -60,10 +60,13 @@
   position: relative;
   z-index: 3;
   overflow: hidden;
-  height: 100%; /* 👈 Make it fill its parent */
-  display: flex; /* 👈 Flex layout */
+  height: 100%;
+  width: 100%;
+  display: flex;
   flex-direction: column;
-  justify-content: flex-end; /* 👈 Push children to bottom */
+  justify-content: flex-start; /* content stays at top */
+  flex-shrink: 0; /* 🚫 Don't shrink */
+  flex-grow: 0;   /* 🚫 Don't grow */
 }
 
 .grain {
