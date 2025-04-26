@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>xSecurity Terminal</title>
+    <meta name="description" content="Throwback retro CRT style layout for a personalized startpage.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="icon" type="image/png" href="/favicon.png"/>
+
+    
+    <link rel="stylesheet" href="https://unpkg.com/@csstools/normalize.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glyphicons-halflings@1.9.1/css/glyphicons-halflings.min.css">
+    <link rel="stylesheet" href="/css/crt.min.css">
+    <link rel="stylesheet" href="/css/terminal.css">
+
+    <script src="/js/main.js" type="module"></script>
+</head>
+<body>
+
+<input type="checkbox" id="switch" checked>
+<input type="checkbox" id="flicker">
+<input type="checkbox" id="greenTheme">
+
+<div class="switch-wires"></div>
+<div class="switch-mount">
+    <div class="switch-dirt"></div>
+    <div class="power-label" title="Toggle Scanlines/Flicker"></div>
+    <div class="theme-button amber" title="Toggle CRT phosphor color"></div>
+    <div id="switch-wrap" class="surround on">
+        <div class="switch" title="Toggle CRT power">
+            <div class="button"></div>
+            <div class="button-face">
+                <div class="shadow"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="crt">
+    <div class="crt-frame"></div>
+    <div class="crt-glow screen-on"></div>
+</div>
+<div class="crt-effects"></div>
+
+<div class="wrapper container">
+    <audio id="snd_power_on" src="/sounds/power_on.mp3" autoplay="false" preload="auto">
+        Your browser does not support the <code>audio</code> element.
+    </audio>
+    <audio id="snd_power_off"  src="/sounds/power_off.mp3" autoplay="false" preload="auto">
+        Your browser does not support the <code>audio</code> element.
+    </audio>
+    <audio id="snd_keypress" src="/sounds/keypress.mp3" autoplay="false" preload="auto">
+        Your browser does not support the <code>audio</code> element.
+    </audio>
+    <div class="terminal-content">
+        <div class="terminal">
+            <div class="scanline"></div>
+            <div class="grain"></div>
+            <div class="terminal-content-inner">
+                <div id="terminal-output"></div>
+                <div id="terminal-input-wrapper">
+                    <span id="input-prefix">$ / > </span>
+                    <div id="terminal-input" contenteditable="true"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay">Video 1</div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tagsort@1.4.0/tagsort.min.js"></script>
+
+</body>
+</html>
