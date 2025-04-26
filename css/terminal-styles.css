@@ -1,0 +1,101 @@
+.terminal-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal {
+  padding: 1em;
+  border-radius: 5px;
+  animation: txt-shadow 1.6s infinite;
+  font-size: calc(10px + (16 - 10) * ((100vw - 300px) / (1600 - 300)));
+  overflow: hidden; /* 👈 Disable scroll */
+}
+
+/* Hide scrollbar */
+.terminal::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal #terminal-output {
+  /* color: #FFA128; */
+  font-weight: bold;
+  height: 100%; /* 👈 Make it fill its parent */
+  margin-bottom: 0.5em;
+  white-space: pre-wrap; 
+  overflow: hidden; /* 👈 Disable scroll */
+}
+
+.terminal {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  overflow: hidden;
+}
+
+  
+@media (min-width: 768px) {
+  .terminal {
+    width: 95vw;
+    height: 90vh;
+  }
+}
+    
+.terminal #terminal-input-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  height: 1.2em;
+}
+
+.terminal::before {
+  content: "";
+  width: 100%;
+  height: 100%;
+  opacity: 0.3;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.terminal-content {
+  position: relative;
+  z-index: 3;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start; /* content stays at top */
+  flex-shrink: 0; /* 🚫 Don't shrink */
+  flex-grow: 0;   /* 🚫 Don't grow */
+}
+
+.grain {
+  animation: grain 8s steps(10) infinite;
+  background-image: url(https://i.ibb.co/6Rw6ysv/noise.png);
+  height: 300%;
+  left: -30%;
+  opacity: 0.3;
+  position: absolute;
+  top: -110%;
+  width: 200%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.terminal #terminal-input {
+  outline: none;
+  cursor: none;
+  font-weight: bold;
+  background-color: transparent;
+  border: none;
+  word-break: break-all;
+  white-space: pre-wrap;
+  caret-color: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+#input-prefix {
+  font-weight: bold;
+  margin-right: 0.5em;
+}
