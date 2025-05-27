@@ -3,53 +3,64 @@ import { scrollToBottom } from './utils.js';
 
 // Preload the sound
 const keySound = new Audio('sounds/keypress.mp3');
-keySound.volume = 0.4; // Optional: make it quieter
+keySound.volume = 0.4;
 
 let commandHistory = [];
 let commandIndex = -1;
 
 const terminalInput = document.getElementById('terminal-input');
-terminalInput.addEventListener('keydown', handleInput);
+if (terminalInput) {
+  terminalInput.addEventListener('keydown', handleInput);
 
-// Also globally listen
-document.addEventListener('keydown', (event) => {
-  if (event.target !== terminalInput) {
-    terminalInput.focus();
-    // Need to clone the sound if you want rapid typing without delay
-    const soundClone = keySound.cloneNode();
-    soundClone.play();
-  }
-});
+  // Also globally listen
+  document.addEventListener('keydown', (event) => {
+    if (event?.target !== terminalInput) {
+      terminalInput.focus();
+      const soundClone = keySound.cloneNode();
+      soundClone.play().catch(e => console.warn("Keypress sound blocked:", e));
+    }
+  });
+}
 
 export async function handleInput(event) {
+  if (!event?.target) return;
+
   const terminalOutput = document.getElementById("terminal-output");
   const terminalInput = event.target;
   
   // Play typing sound for any key that's "printable"
-  if (event.key.length === 1 || event.key === "Backspace") {
+  if (event.key?.length === 1 || event.key === "Backspace") {
     const soundClone = keySound.cloneNode();
-    soundClone.play();
+    soundClone.play().catch(e => console.warn("Keypress sound blocked:", e));
   }
 
-  if (event.key === "Enter") {
-    event.preventDefault();
-    handleEnterKey(terminalOutput, terminalInput);
-  } else if (event.key === "ArrowUp") {
-    event.preventDefault();
-    handleArrowUp(terminalInput);
-  } else if (event.key === "ArrowDown") {
-    event.preventDefault();
-    handleArrowDown(terminalInput);
-  } else if (event.key === "Escape") {
-    event.preventDefault();
-    handleEscape(terminalInput);
-  } else if (event.key === "Tab") {
-    event.preventDefault();
-    handleTab(terminalInput);
+  switch (event.key) {
+    case "Enter":
+      event.preventDefault();
+      await handleEnterKey(terminalOutput, terminalInput);
+      break;
+    case "ArrowUp":
+      event.preventDefault();
+      handleArrowUp(terminalInput);
+      break;
+    case "ArrowDown":
+      event.preventDefault();
+      handleArrowDown(terminalInput);
+      break;
+    case "Escape":
+      event.preventDefault();
+      handleEscape(terminalInput);
+      break;
+    case "Tab":
+      event.preventDefault();
+      handleTab(terminalInput);
+      break;
   }
 }
 
 async function handleEnterKey(terminalOutput, terminalInput) {
+  if (!terminalOutput || !terminalInput) return;
+
   const inputText = terminalInput.innerText.trim();
   const outputText = processCommand(inputText);
 
@@ -57,20 +68,17 @@ async function handleEnterKey(terminalOutput, terminalInput) {
     const newOutputLine = document.createElement("div");
     terminalOutput.appendChild(newOutputLine);
 
-    commandHistory.push(inputText);
-    commandIndex = commandHistory.length;
-
     if (inputText.length > 0) {
+      commandHistory.push(inputText);
+      commandIndex = commandHistory.length;
+      
       terminalInput.innerText = "";
-      terminalOutput.appendChild(newOutputLine);
-
       const inputPrefix = document.getElementById("input-prefix");
-      await animateText(newOutputLine, inputPrefix.textContent, 10, terminalInput, inputPrefix);
+      await animateText(newOutputLine, inputPrefix?.textContent || "", 10, terminalInput, inputPrefix);
     }
+
     await animateText(newOutputLine, outputText, 10, terminalInput);
     scrollToBottom();
-    terminalInput.innerText = "";
-    terminalInput.focus();
   }
 
   terminalInput.innerText = "";
@@ -78,16 +86,20 @@ async function handleEnterKey(terminalOutput, terminalInput) {
 }
 
 function handleArrowUp(terminalInput) {
+  if (!terminalInput) return;
+  
   if (commandIndex > 0) {
     commandIndex--;
-    terminalInput.innerText = commandHistory[commandIndex];
+    terminalInput.innerText = commandHistory[commandIndex] || "";
   }
 }
 
 function handleArrowDown(terminalInput) {
+  if (!terminalInput) return;
+
   if (commandIndex < commandHistory.length - 1) {
     commandIndex++;
-    terminalInput.innerText = commandHistory[commandIndex];
+    terminalInput.innerText = commandHistory[commandIndex] || "";
   } else if (commandIndex === commandHistory.length - 1) {
     commandIndex++;
     terminalInput.innerText = "";
@@ -95,10 +107,14 @@ function handleArrowDown(terminalInput) {
 }
 
 function handleEscape(terminalInput) {
-  terminalInput.innerText = "";
+  if (terminalInput) {
+    terminalInput.innerText = "";
+  }
 }
 
 function handleTab(terminalInput) {
+  if (!terminalInput) return;
+
   const inputText = terminalInput.innerText.trim();
   const suggestions = getAutocompleteSuggestions(inputText);
 

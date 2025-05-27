@@ -3,30 +3,33 @@ import { scrollToBottom } from '../handlers/utils.js';
 
 export async function showWelcomeMessage() {
     const terminalOutput = document.getElementById("terminal-output");
-    const welcomeMessage = banner;
+    if (!terminalOutput) return;
+
     const newOutputLine = document.createElement("div");
     terminalOutput.appendChild(newOutputLine);
-    await animateText(newOutputLine, welcomeMessage);
+    await animateText(newOutputLine, banner);
     scrollToBottom();
 }
 
 export function processCommand(inputText) {
-    const terminalInput = document.getElementById("terminal-input");
-    const userCommand = terminalInput.textContent;
-    let response = '';
+    if (!inputText?.trim()) return '';
 
-    switch (inputText.toLowerCase()) {
+    const command = inputText.toLowerCase().trim();
+    const userCommand = `${inputText}\n`;
+
+    switch (command) {
       case "help":
-        return userCommand + "\n" + help;
+        return userCommand + help;
       case "date":
-        return userCommand + "\n" + new Date().toLocaleString();
+        return userCommand + new Date().toLocaleString();
       case "clear":
-        document.getElementById("terminal-output").innerHTML = "";
+        const terminal = document.getElementById("terminal-output");
+        if (terminal) terminal.innerHTML = "";
         return "";
       case "about":
-        return userCommand + "\n" + about;
+        return userCommand + about;
       default:
-        return userCommand + "\n" + `Unknown command: ${inputText}`;
+        return userCommand + `Unknown command: ${inputText}`;
     }
 }
 
@@ -36,23 +39,29 @@ document.addEventListener("click", () => {
 });
   
 export async function animateText(element, text, delay = 10, terminalInput, inputPrefix) {
+    if (!element || !text) return;
+
+    // Disable input during animation
     if (terminalInput) {
         terminalInput.contentEditable = "false";
         if (inputPrefix) inputPrefix.style.display = "none";
     }
 
-    // Calculate speed factor based on character count
-    const speedFactor = text.length <= 50 ? 1 : text.length <= 100 ? 10 : 20;
-    const adjustedDelay = delay / speedFactor;
+    try {
+        // Calculate speed factor based on text length
+        const speedFactor = text.length <= 50 ? 1 : text.length <= 100 ? 10 : 20;
+        const adjustedDelay = delay / speedFactor;
 
-    for (const char of text) {
-        element.textContent += char;
-        scrollToBottom();
-        await new Promise((resolve) => setTimeout(resolve, adjustedDelay));
-    }
-
-    if (terminalInput) {
-        terminalInput.contentEditable = "true";
-        if (inputPrefix) inputPrefix.style.display = "inline";
+        for (const char of text) {
+            element.textContent += char;
+            scrollToBottom();
+            await new Promise(resolve => setTimeout(resolve, adjustedDelay));
+        }
+    } finally {
+        // Re-enable input after animation (even if there was an error)
+        if (terminalInput) {
+            terminalInput.contentEditable = "true";
+            if (inputPrefix) inputPrefix.style.display = "inline";
+        }
     }
 }
