@@ -1,9 +1,11 @@
 import { handleInput } from './handlers/inputHandler.js';
+import { handleClick } from './handlers/globalHandlers.js';
 
 export function init() {
   console.log("Terminal initialized");
 
   const terminalInput = document.getElementById("terminal-input");
+  if (!terminalInput) return;
 
   // Add touch event listeners for terminal input
   terminalInput.addEventListener("click", handleClick);
@@ -14,7 +16,6 @@ export function init() {
       document.body.scrollTop = document.documentElement.scrollTop = terminalInput.offsetTop;
     }, 500);
   });
-  if (terminalInput) {
-    terminalInput.addEventListener("keydown", handleInput);
-  }
+  
+  terminalInput.addEventListener("keydown", handleInput);
 }

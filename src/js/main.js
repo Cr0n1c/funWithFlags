@@ -19,7 +19,7 @@ Object.assign(window, {
 // Helper for toggling CRT screen power effect
 function powerOn(playSound = true) {
   var sndOn = document.getElementById("snd_power_on");
-  if (playSound) sndOn.play().catch(e => console.warn("Power on sound blocked:", e));
+  if (playSound && sndOn) sndOn.play().catch(e => console.warn("Power on sound blocked:", e));
   $("#switch").prop("checked", true);
   $(".surround").addClass("on");
   createCookie('power', 1);
@@ -27,7 +27,7 @@ function powerOn(playSound = true) {
 
 function powerOff(playSound = true) {
   var sndOff = document.getElementById("snd_power_off");
-  if (playSound) sndOff.play().catch(e => console.warn("Power off sound blocked:", e));
+  if (playSound && sndOff) sndOff.play().catch(e => console.warn("Power off sound blocked:", e));
   $("#switch").prop("checked", false);
   $(".surround").removeClass("on");
   createCookie('power', 0);
@@ -55,7 +55,6 @@ function scanlinesOff() {
   createCookie('flicker',0);
 }
 function toggleScanlines() {
-  //if ($("#flicker").is(":checked") && $("#switch-wrap").hasClass("on")) {
   if ($("#flicker").is(":checked")) {
       scanlinesOff();
   } else {
