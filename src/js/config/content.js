@@ -1,27 +1,49 @@
+// Helper functions
 export const pad = (n) => String(n).padStart(2, '0');
 
-// CMOS failure simulation
-const cmosFailed = Math.random() < 0.5;
+// System state
+const SYSTEM_STATUS = {
+  POST: 'OK',
+  MEMORY: 'OK',
+  VIDEO: 'OK',
+  KEYBOARD: 'OK',
+  DISK: 'OK',
+  NETWORK: 'OK',
+  PARALLEL: 'OK',
+  SERIAL: 'OK'
+};
 
-// Use UTC now or UTC epoch
+// CMOS and time settings
+const cmosFailed = Math.random() < 0.5;
 const now = new Date();
 const currentDate = cmosFailed ? new Date(0) : now;
 
-// formattedTime using UTC fields
 export const formattedTime = `${pad(currentDate.getUTCMonth() + 1)}/${pad(currentDate.getUTCDate())}/${currentDate.getUTCFullYear()} ${pad(currentDate.getUTCHours())}:${pad(currentDate.getUTCMinutes())}:${pad(currentDate.getUTCSeconds())}`;
 
-// Banner text ascii art
+// ASCII art and content sections
+const ASCII_LOGO = `
+                    ██╗██╗         ██╗           ██╗      █████╗ ██████╗ ███████╗
+                    ██║██║      ████████╗        ██║     ██╔══██╗██╔══██╗██╔════╝
+              ████████║████████╗╚══██╔══╝        ██║     ███████║██████╔╝███████╗
+              ██╔═══██║██║   ██║   ██║           ██║     ██║  ██║██╔══██╗╚════██║
+              ████████║███████╔╝   ██║           ███████╗██║  ██║██████╔╝███████║
+               ╚══════╝╚══════╝    ╚═╝           ╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
+                                                   Secure Boot Environment v0.0.1`;
+
+const DIVIDER = '.......................................................................................';
+
+// Banner text with system checks
 export const banner = `
     Initializing dbt BIOS...
 
-    > POST (Power-On Self-Test) .......... OK
-    > Memory Test ........................ OK
-    > Video Output ....................... OK
-    > Keyboard Interface ................. OK
-    > Disk Controller .................... OK
-    > Network Test ....................... OK
-    > Parallel Port ...................... OK
-    > Serial Port ........................ OK
+    > POST (Power-On Self-Test) .......... ${SYSTEM_STATUS.POST}
+    > Memory Test ........................ ${SYSTEM_STATUS.MEMORY}
+    > Video Output ....................... ${SYSTEM_STATUS.VIDEO}
+    > Keyboard Interface ................. ${SYSTEM_STATUS.KEYBOARD}
+    > Disk Controller .................... ${SYSTEM_STATUS.DISK}
+    > Network Test ....................... ${SYSTEM_STATUS.NETWORK}
+    > Parallel Port ...................... ${SYSTEM_STATUS.PARALLEL}
+    > Serial Port ........................ ${SYSTEM_STATUS.SERIAL}
     > CMOS Battery ....................... ${cmosFailed ? 'FAILED' : 'OK'}
     > Loading boot sector ................ OK
     ${cmosFailed ? `\n    Warning: System clock reset to default factory settings.\n` : ''}
@@ -35,23 +57,27 @@ export const banner = `
 
     System clock synchronized to ${cmosFailed ? '01/01/1970 00:00:00' : formattedTime}
 
-    .......................................................................................
+    ${DIVIDER}
 
-                    ██╗██╗         ██╗           ██╗      █████╗ ██████╗ ███████╗
-                    ██║██║      ████████╗        ██║     ██╔══██╗██╔══██╗██╔════╝
-              ████████║████████╗╚══██╔══╝        ██║     ███████║██████╔╝███████╗
-              ██╔═══██║██║   ██║   ██║           ██║     ██║  ██║██╔══██╗╚════██║
-              ████████║███████╔╝   ██║           ███████╗██║  ██║██████╔╝███████║
-               ╚══════╝╚══════╝    ╚═╝           ╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝
-                                                   Secure Boot Environment v0.0.1
+    ${ASCII_LOGO}
     
-    .......................................................................................
+    ${DIVIDER}
 
     Type 'help' for a list of available commands.
 `;
 
-export const about = `
+// Help content
+export const help = `
+    * Available Commands:
+      - help: Display a list of available commands.
+      - date: Show the current date and time.
+      - clear: Clear the terminal output.
+      - about: Learn more about our CTF.
+    ${DIVIDER}
+`;
 
+// About content
+export const about = `
     * About This CTF:
         Hello, this is your awesome Security Team! We are excited that you have taken
         part in our Capture The Flag (CTF) event. This CTF is designed to test your skills
@@ -62,14 +88,5 @@ export const about = `
         of this CTF is to learn and have fun. We hope you enjoy the experience and gain
         valuable insights into the world of cybersecurity. Reach out to us if you have
         any questions or need assistance. Good luck, and may the best team win!
-    .......................................................................................
-`;
-
-export const help = `
-    * Available Commands:
-      - help: Display a list of available commands.
-      - date: Show the current date and time.
-      - clear: Clear the terminal output.
-      - about: Learn more about our CTF.
-    .......................................................................................
+    ${DIVIDER}
 `;

@@ -1,4 +1,6 @@
 export function scrollToBottom() {
   const terminal = document.querySelector('.terminal');
-  terminal.scrollTop = terminal.scrollHeight;
+  if (terminal) {
+    terminal.scrollTop = terminal.scrollHeight;
+  }
 }
