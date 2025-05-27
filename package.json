@@ -9,8 +9,8 @@
   ],
   "scripts": {
     "clean": "rm -rf dist release",
-    "copy-src": "mkdir -p dist && cp -R src/* dist/",
-    "sass": "sass dist/sass/:dist/css/ --style compressed",
+    "copy-src": "mkdir -p dist && cp -R src/* dist/ && rm -rf dist/sass",
+    "sass": "sass src/sass/:dist/css/ --style compressed",
     "sass:watch": "sass --watch src/sass:dist/css --style expanded",
     "minify:html": "minify src/index.html > dist/index.html",
     "prebuild:dev": "npm run clean && npm run copy-src",
