@@ -1,6 +1,8 @@
 # Retro Terminal
 
-A throwback retro CRT-style terminal application with a beautiful, nostalgic interface. This application provides an interactive terminal experience with classic CRT monitor effects, including scanlines, screen flicker, and phosphor color options.
+A throwback retro CRT-style terminal application with a beautiful, nostalgic interface. This application provides an interactive terminal experience with classic CRT monitor effects, including scanlines, screen flicker, phosphor color options, and secure authentication.
+
+**Demo:** [Link](https://cr0n1c.github.io/funWithFlags/)
 
 ![Retro Terminal](docs/screenshot.png)
 
@@ -13,6 +15,8 @@ A throwback retro CRT-style terminal application with a beautiful, nostalgic int
 - 📺 Fullscreen mode support
 - 💾 Command auto-completion
 - 🎮 Responsive design for all screen sizes
+- 🔐 Secure Okta authentication
+- 🔄 Session persistence
 
 ## Available Commands
 
@@ -20,24 +24,33 @@ A throwback retro CRT-style terminal application with a beautiful, nostalgic int
 - `date` - Show the current date and time
 - `clear` - Clear the terminal output
 - `about` - Learn more about the application
+- `login` - Authenticate using Okta
+- `logout` - End your session
 
 ## Prerequisites
 
 - Node.js (v14 or higher)
 - npm (v6 or higher)
+- Okta developer account (for authentication features)
 
 ## Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Cr0n1c/retro-terminal.git
-   cd retro-terminal
+   git clone https://github.com/Cr0n1c/funWithFlags.git
+   cd funWithFlags
    ```
 
 2. Install dependencies:
    ```bash
    npm install
    ```
+
+3. Configure Okta authentication:
+   - Create an Okta developer account
+   - Set up a new OIDC application
+   - Configure the allowed origins and redirect URIs
+   - Update the Okta configuration in your environment
 
 ## Development
 
@@ -75,32 +88,38 @@ npm run start:prod
 
 This will start a server on port 8080.
 
-## Deployment
+## Browser Compatibility
 
-The application is configured for deployment to GitHub Pages. To deploy:
+The application works best in modern browsers with the following considerations:
 
-```bash
-npm run deploy
-```
+### Third-Party Cookies
+- Chrome's new cookie policies may affect authentication
+- Users will be notified if third-party cookies are disabled
+- Instructions are provided for enabling necessary cookies
+- Alternative browsers may be recommended for optimal experience
 
-This will:
-1. Create a production build
-2. Copy the build to a release directory
-3. Deploy to GitHub Pages
-4. Clean up temporary files
+### Authentication
+- Uses popup-based authentication flow
+- Supports token-based session management
+- Handles CORS configurations automatically
+- Provides clear error messages for authentication issues
 
 ## Project Structure
 
 ```
-retro-terminal/
+funWithFlags/
 ├── src/
-│   ├── fonts/         # Custom web fonts
-│   ├── images/        # Images and assets
-│   ├── js/           # JavaScript source files
+│   ├── fonts/        # Custom web fonts
+│   ├── images/       # Images and assets
+│   ├── js/
+│   │   ├── services/ # Authentication and other services
+│   │   ├── handlers/ # Event handlers
+│   │   └── terminal/ # Terminal functionality
 │   ├── sass/         # SASS stylesheets
 │   └── index.html    # Main HTML file
 ├── dist/             # Production build output
 ├── release/          # Temporary deployment directory
+├── docs/             # Houses artifacts for README.md
 └── package.json      # Project configuration
 ```
 
@@ -120,6 +139,14 @@ Sound effects can be customized by replacing the audio files in the `src/sounds`
 - `power_on.mp3` - Played when terminal starts
 - `power_off.mp3` - Played when terminal shuts down
 - `keypress.mp3` - Played when typing
+
+### Authentication Configuration
+
+The authentication can be customized by modifying:
+- Okta application settings
+- Token management preferences
+- Session timeout values
+- Error message templates
 
 ## Contributing
 
