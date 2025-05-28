@@ -1,4 +1,4 @@
-import { initOktaAuth } from '../config/okta.js';
+import { initOktaAuth } from './okta.js';
 
 // Initialize Okta Auth
 let oktaAuth = null;

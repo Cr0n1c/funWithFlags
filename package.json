@@ -15,7 +15,7 @@
     "minify:html": "minify src/index.html > dist/index.html",
     "prebuild:dev": "npm run clean && npm run copy-src",
     "build:dev": "npm run prebuild:dev && npm run sass",
-    "start:dev": "nodemon --watch src --ext '' --exec 'npm run build:dev' & http-server dist -p 8888 -c no-store",
+    "start:dev": "OKTA_DOMAIN=dev-example.okta.com OKTA_CLIENT_ID=default_client_id nodemon --watch src --ext '' --exec 'npm run build:dev' & http-server dist -p 8888 -c no-store",
     "prebuild:prod": "npm run clean && npm run copy-src",
     "build:prod": "npm run prebuild:prod && npm run sass && npm run minify:html && rm -rf dist/sass",
     "start:prod": "http-server dist -p 8080 -d false",
@@ -41,8 +41,5 @@
     "minify": "^14.0.0",
     "nodemon": "^3.1.10",
     "sass": "^1.89.0"
-  },
-  "dependencies": {
-    "js-yaml": "^4.1.0"
   }
 }

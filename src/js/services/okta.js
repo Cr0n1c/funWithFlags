@@ -1,25 +1,23 @@
-// Function to load and validate config
-async function loadConfig() {
-    try {
-        const response = await fetch('/config.yaml');
-        if (!response.ok) {
-            throw new Error(`Failed to load config: ${response.status} ${response.statusText}`);
-        }
+import env from '../config/env.js';
 
-        const yamlText = await response.text();
-        const config = jsyaml.load(yamlText);
+// Function to load and validate config
+function loadConfig() {
+    try {
+        // Read from environment configuration
+        const domain = env.OKTA_DOMAIN;
+        const clientId = env.OKTA_CLIENT_ID;
 
         // Validate config
-        if (!config?.okta?.domain) {
-            throw new Error('Missing Okta domain in config');
+        if (!domain) {
+            throw new Error('Missing Okta domain in environment configuration');
         }
-        if (!config.okta.client_id) {
-            throw new Error('Missing Okta client ID in config');
+        if (!clientId) {
+            throw new Error('Missing Okta client ID in environment configuration');
         }
 
         return {
-            domain: config.okta.domain,
-            clientId: config.okta.client_id
+            domain,
+            clientId
         };
     } catch (error) {
         console.error('Error loading config:', error);
@@ -45,7 +43,7 @@ export async function getOktaConfig() {
     }
 
     try {
-        const config = await loadConfig();
+        const config = loadConfig();
         oktaConfig = {
             issuer: `https://${config.domain}/oauth2/default`,
             clientId: config.clientId,
