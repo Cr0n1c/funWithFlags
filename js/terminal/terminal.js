@@ -8,7 +8,46 @@ export async function showWelcomeMessage() {
 
     const newOutputLine = document.createElement("div");
     terminalOutput.appendChild(newOutputLine);
-    await animateText(newOutputLine, banner);
+    
+    // Split the banner into sections
+    const bannerParts = banner.split('HIMEM is testing extended memory...');
+    await animateText(newOutputLine, bannerParts[0]);
+    
+    // Add memory test section with proper spacing
+    await animateText(newOutputLine, '\n    HIMEM is testing extended memory...\n');
+    
+    // Create container for memory lines with white-space: pre to preserve formatting
+    const memLines = document.createElement('div');
+    memLines.style.whiteSpace = 'pre';
+    newOutputLine.appendChild(memLines);
+    
+    // Base memory
+    const baseMemLine = document.createElement('span');
+    baseMemLine.textContent = '    > 0K base memory';
+    memLines.appendChild(baseMemLine);
+    await animateMemoryCount(baseMemLine, 64);
+    baseMemLine.textContent += ' OK';
+    memLines.appendChild(document.createTextNode('\n'));
+    
+    // First extended memory
+    const extMem1Line = document.createElement('span');
+    extMem1Line.textContent = '    > 0K extended memory';
+    memLines.appendChild(extMem1Line);
+    await animateMemoryCount(extMem1Line, 256);
+    extMem1Line.textContent += ' OK';
+    memLines.appendChild(document.createTextNode('\n'));
+    
+    // Second extended memory
+    const extMem2Line = document.createElement('span');
+    extMem2Line.textContent = '    > 0K extended memory';
+    memLines.appendChild(extMem2Line);
+    await animateMemoryCount(extMem2Line, 1024);
+    extMem2Line.textContent += ' OK';
+    memLines.appendChild(document.createTextNode('\n'));
+    
+    // Continue with the rest of the banner
+    await animateText(newOutputLine, bannerParts[1].split('64K base memory OK')[1].split('256K extended memory OK')[1].split('1024K extended memory OK')[1]);
+    
     scrollToBottom();
 }
 
@@ -83,4 +122,27 @@ export async function animateText(element, text, delay = 10, terminalInput, inpu
             if (inputPrefix) inputPrefix.style.display = "inline";
         }
     }
+}
+
+async function animateMemoryCount(element, targetValue, duration = 2000) {
+  const start = performance.now();
+  const startValue = 0;
+
+  return new Promise(resolve => {
+    function update(currentTime) {
+      const elapsed = currentTime - start;
+      const progress = Math.min(elapsed / duration, 1);
+
+      const currentValue = Math.floor(startValue + (targetValue - startValue) * progress);
+      element.textContent = element.textContent.replace(/\d+K/, `${currentValue}K`);
+
+      if (progress < 1) {
+        requestAnimationFrame(update);
+      } else {
+        resolve();
+      }
+    }
+
+    requestAnimationFrame(update);
+  });
 }
