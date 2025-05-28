@@ -3,11 +3,7 @@ import { initCursor } from './terminal/cursor.js';
 import { showWelcomeMessage } from './terminal/terminal.js';
 import { handleClick, theme, fullscreen, globalListener } from './handlers/globalHandlers.js';
 import jQuery from 'jquery';
-
-// Define moment type
-interface Moment {
-  format(format: string): string;
-}
+import moment from 'moment';
 
 // Declare jQuery and moment to be available globally
 declare global {
@@ -17,12 +13,38 @@ declare global {
     fullscreen: typeof fullscreen;
     $: typeof jQuery;
     jQuery: typeof jQuery;
-    moment: Moment;
   }
 }
 
 const $ = window.$;
-const moment = window.moment;
+
+// Set a cookie to store prefs
+export const createCookie = (name: string, value: string, days?: number): void => {
+  let expires = '';
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = `; expires=${date.toUTCString()}`;
+  }
+  document.cookie = `${name}=${value}${expires}; path=/`;
+};
+
+// Get a cookie to read prefs
+export const readCookie = (name: string): string | null => {
+  const nameEQ = `${name}=`;
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+  }
+  return null;
+};
+
+// Remove a cookie
+export const eraseCookie = (name: string): void => {
+  createCookie(name, '', -1);
+};
 
 document.addEventListener('DOMContentLoaded', init);
 initCursor();
@@ -121,13 +143,17 @@ export const initLocation = (): void => {
 
     navigator.geolocation.getCurrentPosition(
       (pos: GeolocationPosition) => {
-        const crd = pos.coords;
+        // eslint-disable-next-line no-console
         console.log('Your current position is:');
-        console.log(`Latitude : ${crd.latitude}`);
-        console.log(`Longitude: ${crd.longitude}`);
-        console.log(`More or less ${crd.accuracy} meters.`);
+        // eslint-disable-next-line no-console
+        console.log(`Latitude : ${pos.coords.latitude}`);
+        // eslint-disable-next-line no-console
+        console.log(`Longitude: ${pos.coords.longitude}`);
+        // eslint-disable-next-line no-console
+        console.log(`More or less ${pos.coords.accuracy} meters.`);
       },
       (err: GeolocationPositionError) => {
+        // eslint-disable-next-line no-console
         console.warn(`ERROR(${err.code}): ${err.message}`);
       },
       options,
@@ -149,34 +175,6 @@ export const randomgen = (): void => {
   }
 
   $('.random').text(`${text}^^EXTRA1KBPAGELOADWHYNOT?`);
-};
-
-// Set a cookie to store prefs
-export const createCookie = (name: string, value: string, days?: number): void => {
-  let expires = '';
-  if (days) {
-    const date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    expires = `; expires=${date.toUTCString()}`;
-  }
-  document.cookie = `${name}=${value}${expires}; path=/`;
-};
-
-// Get a cookie to read prefs
-export const readCookie = (name: string): string | null => {
-  const nameEQ = `${name}=`;
-  const ca = document.cookie.split(';');
-  for (let i = 0; i < ca.length; i++) {
-    let c = ca[i];
-    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
-  }
-  return null;
-};
-
-// Remove a cookie
-export const eraseCookie = (name: string): void => {
-  createCookie(name, '', -1);
 };
 
 const readPrefs = (): void => {

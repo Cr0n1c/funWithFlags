@@ -17,6 +17,37 @@ interface CustomHTMLElement extends HTMLElement {
   msRequestFullscreen?: () => Promise<void>;
 }
 
+export function toggleFullscreen(enable?: boolean): void {
+  const doc = document as CustomDocument;
+  const docEl = doc.documentElement as CustomHTMLElement;
+
+  if (enable === undefined) {
+    enable = !doc.fullscreenElement && 
+            !doc.mozFullScreenElement && 
+            !doc.webkitFullscreenElement && 
+            !doc.msFullscreenElement;
+  }
+
+  const requestFS = docEl.requestFullscreen ||
+                   docEl.mozRequestFullScreen || // Firefox
+                   docEl.webkitRequestFullscreen || // Chrome, Safari, Opera
+                   docEl.msRequestFullscreen; // IE/Edge
+
+  const exitFS = doc.exitFullscreen ||
+                doc.mozCancelFullScreen ||
+                doc.webkitExitFullscreen ||
+                doc.msExitFullscreen;
+
+  if (enable && requestFS) {
+    requestFS.call(docEl);
+  } else if (!enable && exitFS && (doc.fullscreenElement || 
+                                 doc.mozFullScreenElement || 
+                                 doc.webkitFullscreenElement || 
+                                 doc.msFullscreenElement)) {
+    exitFS.call(doc);
+  }
+}
+
 export function handleClick(event: MouseEvent | TouchEvent): void {
   if (!event) return;
   
@@ -94,35 +125,4 @@ export function globalListener(event: KeyboardEvent): void {
 const terminalInput = document.getElementById('terminal-input');
 if (terminalInput) {
   terminalInput.addEventListener('input', scrollToBottom);
-}
-
-export function toggleFullscreen(enable?: boolean): void {
-  const doc = document as CustomDocument;
-  const docEl = doc.documentElement as CustomHTMLElement;
-
-  if (enable === undefined) {
-    enable = !doc.fullscreenElement && 
-            !doc.mozFullScreenElement && 
-            !doc.webkitFullscreenElement && 
-            !doc.msFullscreenElement;
-  }
-
-  const requestFS = docEl.requestFullscreen ||
-                   docEl.mozRequestFullScreen || // Firefox
-                   docEl.webkitRequestFullscreen || // Chrome, Safari, Opera
-                   docEl.msRequestFullscreen; // IE/Edge
-
-  const exitFS = doc.exitFullscreen ||
-                doc.mozCancelFullScreen ||
-                doc.webkitExitFullscreen ||
-                doc.msExitFullscreen;
-
-  if (enable && requestFS) {
-    requestFS.call(docEl);
-  } else if (!enable && exitFS && (doc.fullscreenElement || 
-                                 doc.mozFullScreenElement || 
-                                 doc.webkitFullscreenElement || 
-                                 doc.msFullscreenElement)) {
-    exitFS.call(doc);
-  }
 } 
