@@ -5,26 +5,19 @@ interface OktaAuthClass {
     new(config: OktaAuthConfig): OktaAuthInstance;
 }
 
-export interface OktaAuthInstance {
+interface OktaAuthInstance {
     token: {
-        parseFromUrl(): Promise<{ tokens: any }>;
-        getWithPopup(options: { responseType: string[] }): Promise<{ tokens: any }>;
+        parseFromUrl(): Promise<{ tokens: { accessToken: unknown; idToken: unknown } }>;
+        getWithPopup(options: { responseType: string[] }): Promise<{ tokens: { accessToken: unknown; idToken: unknown } }>;
     };
     tokenManager: {
-        setTokens(tokens: any): Promise<void>;
-        get(tokenName: string): Promise<any>;
+        setTokens(tokens: { accessToken: unknown; idToken: unknown }): Promise<void>;
+        get(tokenName: string): Promise<unknown>;
         clear(): void;
     };
     isAuthenticated(): Promise<boolean>;
-    getUser(): Promise<OktaUser>;
+    getUser(): Promise<{ email: string; name?: string; sub: string }>;
     closeSession(): Promise<void>;
-}
-
-export interface OktaUser {
-    email: string;
-    name?: string;
-    sub: string;
-    [key: string]: any;
 }
 
 declare global {

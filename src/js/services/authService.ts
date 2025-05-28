@@ -1,10 +1,9 @@
 import { initOktaAuth } from '../config/okta.js';
-import type { OktaAuthInstance, OktaUser } from '../config/okta.js';
 
 // Define interfaces for our types
 interface AuthState {
     isAuthenticated: boolean;
-    user: OktaUser | null;
+    user: any | null; // We'll keep this as any for now since we don't have the Okta user type
     isLoggingIn: boolean;
     isLoggingOut: boolean;
 }
@@ -16,7 +15,7 @@ interface AuthError extends Error {
 }
 
 // Initialize Okta Auth
-let oktaAuth: OktaAuthInstance | null = null;
+let oktaAuth: any | null = null;
 
 // Auth state management
 let authState: AuthState = {

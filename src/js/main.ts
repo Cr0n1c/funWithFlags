@@ -7,7 +7,6 @@ import jQuery from 'jquery';
 // Define moment type
 interface Moment {
     format(format: string): string;
-    [key: string]: any;
 }
 
 // Declare jQuery and moment to be available globally

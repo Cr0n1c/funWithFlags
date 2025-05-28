@@ -1,7 +1,7 @@
 {
-  "name": "funWithFlags",
+  "name": "retro-terminal",
   "version": "1.0.0",
-  "homepage": "https://cr0n1c.github.io/funWithFlags",
+  "homepage": "http://cr0n1c.github.io/funWithFlags",
   "description": "Throwback retro CRT style layout with a terminal.",
   "author": "Brandon Helms",
   "contributors": [
@@ -31,10 +31,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cr0n1c/funWithFlags.git"
+    "url": "https://github.com/Cr0n1c/retro-terminal.git"
   },
   "bugs": {
-    "url": "https://github.com/Cr0n1c/funWithFlags/issues",
+    "url": "https://github.com/Cr0n1c/retro-terminal/issues",
     "email": "bhelms85@gmail.com"
   },
   "devDependencies": {
