@@ -86,7 +86,8 @@ export function processCommand(inputText: string | null): string {
         response = `Unknown command: ${inputText}`;
     }
 
-    return userCommand + response;
+    // Add a newline after the response
+    return userCommand + response + '\n';
 }
 
 document.addEventListener("click", () => {

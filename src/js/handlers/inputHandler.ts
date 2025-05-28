@@ -83,6 +83,8 @@ async function handleEnterKey(terminalOutput: HTMLElement, terminalInput: HTMLEl
       }
     }
 
+    // Add a small delay before showing the command output
+    await new Promise(resolve => setTimeout(resolve, 100));
     await animateText(newOutputLine, outputText, 10, terminalInput);
     scrollToBottom();
   }

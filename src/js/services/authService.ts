@@ -83,25 +83,13 @@ async function initializeAuth(): Promise<void> {
         // Check third-party cookie support first
         const cookiesEnabled = await checkThirdPartyCookies();
         if (!cookiesEnabled) {
-            const terminal = document.getElementById("terminal-output");
-            if (terminal) {
-                const warningLine = document.createElement("div");
-                warningLine.textContent = 'Warning: Third-party cookies are disabled. This may affect login functionality. Please enable third-party cookies for this site.';
-                terminal.appendChild(warningLine);
-            }
+            console.warn('Third-party cookies are disabled. This may affect login functionality.');
         }
 
         oktaAuth = await initOktaAuth();
         
         // Check if we're handling a callback
         if (window.location.search.includes('code=') || window.location.hash.includes('access_token=')) {
-            const terminal = document.getElementById("terminal-output");
-            if (terminal) {
-                const newLine = document.createElement("div");
-                newLine.textContent = 'Processing login...';
-                terminal.appendChild(newLine);
-            }
-            
             try {
                 const tokens = await oktaAuth.token.parseFromUrl();
                 await oktaAuth.tokenManager.setTokens(tokens.tokens);
@@ -124,38 +112,68 @@ async function initializeAuth(): Promise<void> {
 
                 // Clear the URL parameters
                 window.history.replaceState({}, document.title, window.location.pathname);
-                
-                // Update terminal with success message
-                if (terminal) {
-                    const successLine = document.createElement("div");
-                    successLine.textContent = `Successfully logged in as ${user.email}`;
-                    terminal.appendChild(successLine);
-                }
             } catch (error) {
                 handleAuthError(error as AuthError, 'Login');
             }
-        }
-
-        // Check authentication state
-        const authenticated = await oktaAuth.isAuthenticated();
-        if (authenticated) {
+        } else {
+            // Only check authentication state if we're not handling a callback
             try {
-                // Get the access token
+                // First check if we have a valid token
                 const accessToken = await oktaAuth.tokenManager.get('accessToken');
                 if (!accessToken) {
-                    throw new Error('No access token available');
+                    // No token, definitely not authenticated
+                    authState = {
+                        isAuthenticated: false,
+                        user: null,
+                        isLoggingIn: false,
+                        isLoggingOut: false
+                    };
+                    return;
                 }
 
-                // Get user info using the access token
-                const user = await oktaAuth.getUser();
+                // We have a token, check if it's still valid
+                const authenticated = await oktaAuth.isAuthenticated();
+                if (!authenticated) {
+                    // Token exists but is invalid, clear it
+                    oktaAuth.tokenManager.clear();
+                    authState = {
+                        isAuthenticated: false,
+                        user: null,
+                        isLoggingIn: false,
+                        isLoggingOut: false
+                    };
+                    return;
+                }
+
+                // Token is valid, try to get user info
+                try {
+                    const user = await oktaAuth.getUser();
+                    authState = {
+                        isAuthenticated: true,
+                        user,
+                        isLoggingIn: false,
+                        isLoggingOut: false
+                    };
+                } catch (error) {
+                    // If we can't get user info but have a valid token,
+                    // we'll still consider the user authenticated
+                    authState = {
+                        isAuthenticated: true,
+                        user: null,
+                        isLoggingIn: false,
+                        isLoggingOut: false
+                    };
+                    // Don't log the error since this is expected behavior
+                }
+            } catch (error) {
+                // If anything fails, assume not authenticated
                 authState = {
-                    isAuthenticated: true,
-                    user,
+                    isAuthenticated: false,
+                    user: null,
                     isLoggingIn: false,
                     isLoggingOut: false
                 };
-            } catch (error) {
-                handleAuthError(error as AuthError, 'Authentication check');
+                console.warn('Authentication check failed:', error);
             }
         }
     } catch (error) {
