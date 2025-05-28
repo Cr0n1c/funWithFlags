@@ -21,7 +21,7 @@ const SYSTEM_STATUS: SystemStatus = {
   DISK: 'OK',
   NETWORK: 'OK',
   PARALLEL: 'OK',
-  SERIAL: 'OK'
+  SERIAL: 'OK',
 };
 
 // CMOS and time settings
@@ -29,7 +29,10 @@ const cmosFailed: boolean = Math.random() < 0.5;
 const now: Date = new Date();
 const currentDate: Date = cmosFailed ? new Date(0) : now;
 
-export const formattedTime: string = `${pad(currentDate.getUTCMonth() + 1)}/${pad(currentDate.getUTCDate())}/${currentDate.getUTCFullYear()} ${pad(currentDate.getUTCHours())}:${pad(currentDate.getUTCMinutes())}:${pad(currentDate.getUTCSeconds())}`;
+export const formattedTime: string = 
+  `${pad(currentDate.getUTCMonth() + 1)}/${pad(currentDate.getUTCDate())}/` +
+  `${currentDate.getUTCFullYear()} ${pad(currentDate.getUTCHours())}:` +
+  `${pad(currentDate.getUTCMinutes())}:${pad(currentDate.getUTCSeconds())}`;
 
 // ASCII art and content sections
 const ASCII_LOGO: string = `
@@ -38,8 +41,8 @@ const ASCII_LOGO: string = `
         | :/\\: || :/\\: || (\\/) || :/\\: || (\\/) || :(): || (\\/) || :/\\: || (\\/) |
         | (__) || :\\/: || :\\/: || :\\/: || :\\/: || ()() || :\\/: || (__) || :\\/: |
         | '--'x|| '--'S|| '--'E|| '--'C|| '--'U|| '--'R|| '--'I|| '--'T|| '--'Y|
-        \`------'\`------'\`------'\`------'\`------'\`------'\`------'\`------'\`------'                                  
-                                                  Secure Boot Environment v0.0.1`;
+        \`------'\`------'\`------'\`------'\`------'\`------'\`------'\`------'\`------'
+        Secure Boot Environment v0.0.1`;
 
 const DIVIDER: string = '.......................................................................................';
 
@@ -57,7 +60,7 @@ export const banner: string = `
     > Serial Port ........................ ${SYSTEM_STATUS.SERIAL}
     > CMOS Battery ....................... ${cmosFailed ? 'FAILED' : 'OK'}
     > Loading boot sector ................ OK
-    ${cmosFailed ? `\n    Warning: System clock reset to default factory settings.\n` : ''}
+    ${cmosFailed ? '\n    Warning: System clock reset to default factory settings.\n' : ''}
     Booting from drive A...
     Starting MS-DOS (xSecurity Edition)...
 
@@ -84,6 +87,9 @@ export const help: string = `
       - date: Show the current date and time.
       - clear: Clear the terminal output.
       - about: Learn more about our CTF.
+      - login: Authenticate with your credentials.
+      - logout: End your current session.
+      - status: Check your authentication status.
     ${DIVIDER}
 `;
 
@@ -93,11 +99,15 @@ export const about: string = `
         Hello, this is your awesome Security Team! We are excited that you have taken
         part in our Capture The Flag (CTF) event. This CTF is designed to test your skills
         in various areas of cybersecurity, including web security, cryptography, reverse
-        engineering, and more. Throughout the event, you will encounter a series of challenges
-        that will require you to think critically and creatively. We encourage you to work
-        collaboratively with your teammates and share your knowledge. Remember, the goal
-        of this CTF is to learn and have fun. We hope you enjoy the experience and gain
-        valuable insights into the world of cybersecurity. Reach out to us if you have
-        any questions or need assistance. Good luck, and may the best team win!
+        engineering, and more.
+
+        Throughout the event, you will encounter a series of challenges that will require
+        you to think critically and creatively. We encourage you to work collaboratively
+        with your teammates and share your knowledge.
+
+        Remember, the goal of this CTF is to learn and have fun. We hope you enjoy the
+        experience and gain valuable insights into the world of cybersecurity. Reach out
+        to us if you have any questions or need assistance. Good luck, and may the best
+        team win!
     ${DIVIDER}
 `; 
