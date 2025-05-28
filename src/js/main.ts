@@ -4,6 +4,12 @@ import { showWelcomeMessage } from './terminal/terminal.js';
 import { handleClick, theme, fullscreen, globalListener } from './handlers/globalHandlers.js';
 import jQuery from 'jquery';
 
+// Define moment type
+interface Moment {
+    format(format: string): string;
+    [key: string]: any;
+}
+
 // Declare jQuery and moment to be available globally
 declare global {
   interface Window {
@@ -12,7 +18,7 @@ declare global {
     fullscreen: typeof fullscreen;
     $: typeof jQuery;
     jQuery: typeof jQuery;
-    moment: any; // Using any for now since we're loading from CDN
+    moment: Moment;
   }
 }
 
