@@ -159,6 +159,12 @@ function eraseCookie(name) {
   createCookie(name,"",-1);
 }
 
+function checkCookies() {
+    cookiePower = getCookie("power") === "1" ? 1 : 0;
+    cookieFlicker = getCookie("flicker") === "1" ? 1 : 0;
+    cookieGreenTheme = getCookie("greenTheme") === "1" ? 1 : 0;
+}
+
 function readPrefs() {
   var cookiePower=readCookie('power'),
       cookieFlicker=readCookie('flicker'),
@@ -167,8 +173,6 @@ function readPrefs() {
       if (cookiePower == 0) { powerOff(false) } else { powerOn(false) }
       if (cookieFlicker == 1) { scanlinesOn() } else { scanlinesOff() }
   if (cookieGreenTheme == 0) { amberTheme() } else { greenTheme() }
-
-  console.log("cookiePower=="+cookiePower+" /// cookieFlicker=="+cookieFlicker+" /// cookieGreenTheme=="+cookieGreenTheme);
 }
 
 $(document).ready(function () {
