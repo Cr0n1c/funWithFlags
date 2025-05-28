@@ -1,8 +1,28 @@
 import env from './env.js';
 
+// Define OktaAuth class type
+interface OktaAuthClass {
+    new(config: OktaAuthConfig): OktaAuthInstance;
+}
+
+interface OktaAuthInstance {
+    token: {
+        parseFromUrl(): Promise<{ tokens: { accessToken: unknown; idToken: unknown } }>;
+        getWithPopup(options: { responseType: string[] }): Promise<{ tokens: { accessToken: unknown; idToken: unknown } }>;
+    };
+    tokenManager: {
+        setTokens(tokens: { accessToken: unknown; idToken: unknown }): Promise<void>;
+        get(tokenName: string): Promise<unknown>;
+        clear(): void;
+    };
+    isAuthenticated(): Promise<boolean>;
+    getUser(): Promise<{ email: string; name?: string; sub: string }>;
+    closeSession(): Promise<void>;
+}
+
 declare global {
     interface Window {
-        OktaAuth: any;
+        OktaAuth: OktaAuthClass;
     }
 }
 
@@ -88,7 +108,7 @@ export async function getOktaConfig(): Promise<OktaAuthConfig> {
 }
 
 // Export a function to initialize Okta auth
-export async function initOktaAuth(): Promise<any> {
+export async function initOktaAuth(): Promise<OktaAuthInstance> {
     const config = await getOktaConfig();
     return new window.OktaAuth(config);
 } 
