@@ -15,7 +15,7 @@
     "minify:html": "minify src/index.html > dist/index.html",
     "prebuild:dev": "npm run clean",
     "build:dev": "npm run copy-src && npm run sass",
-    "start:dev": "nodemon --watch src --ext '*' --exec 'npm run build:dev' & http-server dist -p 8888 -c no-store",
+    "start:dev": "chmod +x scripts/dev.sh && ./scripts/dev.sh",
     "prebuild:prod": "npm run clean",
     "build:prod": "npm run copy-src && npm run sass && npm run minify:html",
     "start:prod": "http-server dist -p 8080 -d false",

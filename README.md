@@ -64,6 +64,23 @@ This will:
 - Start a development server on port 8888
 - Watch for changes in the source files
 - Automatically rebuild when changes are detected
+- Handle process management (Ctrl+C will properly terminate all processes)
+
+### Development Server Features
+
+The development environment includes:
+- Live reload capability
+- Process management for nodemon and http-server
+- Clean shutdown with Ctrl+C
+- No-cache headers for development testing
+- Source file watching for immediate updates
+
+### Development Scripts
+
+- `npm run start:dev` - Start development server with live reload
+- `npm run build:dev` - Build for development
+- `npm run sass:watch` - Watch SASS files for changes
+- `npm run clean` - Clean build directories
 
 ## Production Build
 
@@ -117,6 +134,7 @@ funWithFlags/
 │   │   └── terminal/ # Terminal functionality
 │   ├── sass/         # SASS stylesheets
 │   └── index.html    # Main HTML file
+├── scripts/          # Build and utility scripts
 ├── dist/             # Production build output
 ├── release/          # Temporary deployment directory
 ├── docs/             # Houses artifacts for README.md
