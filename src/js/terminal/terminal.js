@@ -1,5 +1,6 @@
 import { banner, about, help } from "../config/content.js";
 import { scrollToBottom } from '../handlers/utils.js';
+import { login, logout, checkAuthStatus, getAuthState } from '../services/authService.js';
 
 export async function showWelcomeMessage() {
     const terminalOutput = document.getElementById("terminal-output");
@@ -28,6 +29,15 @@ export function processCommand(inputText) {
         return "";
       case "about":
         return userCommand + about;
+      case "login":
+        const loginResponse = login();
+        return userCommand + loginResponse;
+      case "logout":
+        const logoutResponse = logout();
+        return userCommand + logoutResponse;
+      case "status":
+        const statusResponse = checkAuthStatus();
+        return userCommand + statusResponse;
       default:
         return userCommand + `Unknown command: ${inputText}`;
     }
@@ -39,8 +49,11 @@ document.addEventListener("click", () => {
 });
   
 export async function animateText(element, text, delay = 10, terminalInput, inputPrefix) {
-    if (!element || !text) return;
-
+    if (!element) return;
+    
+    // Convert text to string and handle null/undefined
+    const textContent = String(text || '');
+    
     // Disable input during animation
     if (terminalInput) {
         terminalInput.contentEditable = "false";
@@ -49,14 +62,20 @@ export async function animateText(element, text, delay = 10, terminalInput, inpu
 
     try {
         // Calculate speed factor based on text length
-        const speedFactor = text.length <= 50 ? 1 : text.length <= 100 ? 10 : 20;
+        const speedFactor = textContent.length <= 50 ? 1 : textContent.length <= 100 ? 10 : 20;
         const adjustedDelay = delay / speedFactor;
 
-        for (const char of text) {
+        // Split the text into characters and animate
+        const characters = Array.from(textContent);
+        for (const char of characters) {
             element.textContent += char;
             scrollToBottom();
             await new Promise(resolve => setTimeout(resolve, adjustedDelay));
         }
+    } catch (error) {
+        // If animation fails, just set the text immediately
+        console.error('Text animation error:', error);
+        element.textContent = textContent;
     } finally {
         // Re-enable input after animation (even if there was an error)
         if (terminalInput) {

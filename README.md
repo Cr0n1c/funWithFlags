@@ -2,6 +2,8 @@
 
 A throwback retro CRT-style terminal application with a beautiful, nostalgic interface. This application provides an interactive terminal experience with classic CRT monitor effects, including scanlines, screen flicker, and phosphor color options.
 
+**Demo:** [Link](https://cr0n1c.github.io/funWithFlags/)
+
 ![Retro Terminal](docs/screenshot.png)
 
 ## Features
@@ -30,8 +32,8 @@ A throwback retro CRT-style terminal application with a beautiful, nostalgic int
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Cr0n1c/retro-terminal.git
-   cd retro-terminal
+   git clone https://github.com/Cr0n1c/funWithFlags.git
+   cd funWithFlags
    ```
 
 2. Install dependencies:
@@ -92,15 +94,16 @@ This will:
 ## Project Structure
 
 ```
-retro-terminal/
+funWithFlags/
 ├── src/
-│   ├── fonts/         # Custom web fonts
-│   ├── images/        # Images and assets
+│   ├── fonts/        # Custom web fonts
+│   ├── images/       # Images and assets
 │   ├── js/           # JavaScript source files
 │   ├── sass/         # SASS stylesheets
 │   └── index.html    # Main HTML file
 ├── dist/             # Production build output
 ├── release/          # Temporary deployment directory
+├── docs/             # Houses artifacts for README.md
 └── package.json      # Project configuration
 ```
 
