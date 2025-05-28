@@ -1,39 +1,7 @@
-import { initOktaAuth } from './okta.js';
+import { initOktaAuth } from '../config/okta.js';
 
 // Initialize Okta Auth
 let oktaAuth = null;
-initOktaAuth()
-    .then(auth => {
-        oktaAuth = auth;
-        // Check authentication state on page load
-        return oktaAuth.isAuthenticated();
-    })
-    .then(authenticated => {
-        if (authenticated && oktaAuth) {
-            return oktaAuth.getUser();
-        }
-        return null;
-    })
-    .then(user => {
-        if (user) {
-            authState = {
-                isAuthenticated: true,
-                user,
-                isLoggingIn: false,
-                isLoggingOut: false
-            };
-        }
-    })
-    .catch(error => {
-        console.error('Auth initialization error:', error);
-        const terminal = document.getElementById("terminal-output");
-        if (terminal) {
-            const errorLine = document.createElement("div");
-            errorLine.textContent = `Authentication initialization failed: ${error.message}`;
-            errorLine.style.color = 'red';
-            terminal.appendChild(errorLine);
-        }
-    });
 
 // Auth state management
 let authState = {
@@ -42,6 +10,147 @@ let authState = {
     isLoggingIn: false,
     isLoggingOut: false
 };
+
+// Check if third-party cookies are enabled
+function checkThirdPartyCookies() {
+    return new Promise((resolve) => {
+        const testCookie = 'okta-cookie-test';
+        
+        // Try to set a test cookie
+        document.cookie = testCookie + '=1; SameSite=None; Secure';
+        
+        // Check if the cookie was set
+        const cookieEnabled = document.cookie.indexOf(testCookie) !== -1;
+        
+        // Clean up test cookie
+        document.cookie = testCookie + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
+        
+        resolve(cookieEnabled);
+    });
+}
+
+// Helper function to handle auth errors
+function handleAuthError(error, operation) {
+    console.error(`${operation} error:`, error);
+    
+    let errorMessage = error.message;
+    if (error.name === 'AuthApiError' && error.message.includes('Failed to fetch')) {
+        errorMessage = 'Unable to connect to Okta. Please check your network connection and ensure this domain is allowed in your Okta CORS settings.';
+    }
+
+    // Check for cookie-related errors
+    if (error.message?.toLowerCase().includes('cookie') || 
+        error.name === 'AuthApiError' && error.errorCode === 'invalid_session') {
+        errorMessage = 'Third-party cookies appear to be blocked. Please enable third-party cookies for this site or use a different browser.';
+    }
+
+    // Reset auth state
+    authState = {
+        isAuthenticated: false,
+        user: null,
+        isLoggingIn: false,
+        isLoggingOut: false
+    };
+
+    // Update terminal with error message
+    const terminal = document.getElementById("terminal-output");
+    if (terminal) {
+        const errorLine = document.createElement("div");
+        errorLine.textContent = `${operation} failed: ${errorMessage}`;
+        terminal.appendChild(errorLine);
+    }
+
+    return errorMessage;
+}
+
+// Initialize auth and set up callback handling
+async function initializeAuth() {
+    try {
+        // Check third-party cookie support first
+        const cookiesEnabled = await checkThirdPartyCookies();
+        if (!cookiesEnabled) {
+            const terminal = document.getElementById("terminal-output");
+            if (terminal) {
+                const warningLine = document.createElement("div");
+                warningLine.textContent = 'Warning: Third-party cookies are disabled. This may affect login functionality. Please enable third-party cookies for this site.';
+                terminal.appendChild(warningLine);
+            }
+        }
+
+        oktaAuth = await initOktaAuth();
+        
+        // Check if we're handling a callback
+        if (window.location.search.includes('code=') || window.location.hash.includes('access_token=')) {
+            const terminal = document.getElementById("terminal-output");
+            if (terminal) {
+                const newLine = document.createElement("div");
+                newLine.textContent = 'Processing login...';
+                terminal.appendChild(newLine);
+            }
+            
+            try {
+                const tokens = await oktaAuth.token.parseFromUrl();
+                await oktaAuth.tokenManager.setTokens(tokens.tokens);
+                
+                // Get the access token
+                const accessToken = await oktaAuth.tokenManager.get('accessToken');
+                if (!accessToken) {
+                    throw new Error('No access token available');
+                }
+
+                // Get user info using the access token
+                const user = await oktaAuth.getUser();
+                
+                authState = {
+                    isAuthenticated: true,
+                    user,
+                    isLoggingIn: false,
+                    isLoggingOut: false
+                };
+
+                // Clear the URL parameters
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Update terminal with success message
+                if (terminal) {
+                    const successLine = document.createElement("div");
+                    successLine.textContent = `Successfully logged in as ${user.email}`;
+                    terminal.appendChild(successLine);
+                }
+            } catch (error) {
+                handleAuthError(error, 'Login');
+            }
+        }
+
+        // Check authentication state
+        const authenticated = await oktaAuth.isAuthenticated();
+        if (authenticated) {
+            try {
+                // Get the access token
+                const accessToken = await oktaAuth.tokenManager.get('accessToken');
+                if (!accessToken) {
+                    throw new Error('No access token available');
+                }
+
+                // Get user info using the access token
+                const user = await oktaAuth.getUser();
+                authState = {
+                    isAuthenticated: true,
+                    user,
+                    isLoggingIn: false,
+                    isLoggingOut: false
+                };
+            } catch (error) {
+                handleAuthError(error, 'Authentication check');
+            }
+        }
+    } catch (error) {
+        handleAuthError(error, 'Authentication initialization');
+    }
+}
+
+// Initialize auth on page load
+initializeAuth();
 
 export function getAuthState() {
     return authState;
@@ -61,22 +170,48 @@ export function login() {
     }
 
     authState.isLoggingIn = true;
-    
-    // Start Okta login process
-    oktaAuth.signInWithRedirect()
-        .catch(error => {
-            console.error('Login error:', error);
+
+    // Check cookie support before proceeding
+    checkThirdPartyCookies().then(cookiesEnabled => {
+        if (!cookiesEnabled) {
             authState.isLoggingIn = false;
-            // Update terminal with error message
             const terminal = document.getElementById("terminal-output");
             if (terminal) {
-                const newLine = document.createElement("div");
-                newLine.textContent = `Login failed: ${error.message}`;
-                terminal.appendChild(newLine);
+                const warningLine = document.createElement("div");
+                warningLine.textContent = 'Warning: Third-party cookies are disabled. Login may not work properly. Please enable third-party cookies for this site.';
+                terminal.appendChild(warningLine);
             }
+        }
+        
+        // Start Okta login process with token response type
+        return oktaAuth.token.getWithPopup({
+            responseType: ['token', 'id_token']
         });
+    }).then(tokens => {
+        if (!tokens) return; // Skip if cookies check failed
+        return oktaAuth.tokenManager.setTokens(tokens.tokens);
+    }).then(() => {
+        return oktaAuth.getUser();
+    }).then(user => {
+        if (!user) return; // Skip if previous steps failed
+        authState = {
+            isAuthenticated: true,
+            user,
+            isLoggingIn: false,
+            isLoggingOut: false
+        };
+        // Update terminal with success message
+        const terminal = document.getElementById("terminal-output");
+        if (terminal) {
+            const successLine = document.createElement("div");
+            successLine.textContent = `Successfully logged in as ${user.email}`;
+            terminal.appendChild(successLine);
+        }
+    }).catch(error => {
+        handleAuthError(error, 'Login');
+    });
 
-    return 'Redirecting to Okta login...';
+    return 'Initiating login process...';
 }
 
 export function logout() {
@@ -94,39 +229,42 @@ export function logout() {
 
     authState.isLoggingOut = true;
     
-    // Start Okta logout process
-    oktaAuth.signOut()
-        .then(() => {
-            authState = {
-                isAuthenticated: false,
-                user: null,
-                isLoggingIn: false,
-                isLoggingOut: false
-            };
-            // Update terminal with success message
-            const terminal = document.getElementById("terminal-output");
-            if (terminal) {
-                const newLine = document.createElement("div");
-                newLine.textContent = 'Successfully logged out';
-                terminal.appendChild(newLine);
-            }
-        })
-        .catch(error => {
-            console.error('Logout error:', error);
-            authState.isLoggingOut = false;
-            // Update terminal with error message
-            const terminal = document.getElementById("terminal-output");
-            if (terminal) {
-                const newLine = document.createElement("div");
-                newLine.textContent = `Logout failed: ${error.message}`;
-                terminal.appendChild(newLine);
-            }
+    try {
+        // Clear tokens synchronously
+        oktaAuth.tokenManager.clear();
+        
+        // Update state immediately
+        authState = {
+            isAuthenticated: false,
+            user: null,
+            isLoggingIn: false,
+            isLoggingOut: false
+        };
+        
+        // Close the session without redirecting
+        oktaAuth.closeSession().catch(error => {
+            console.warn('Session cleanup warning:', error);
         });
 
-    return 'Logging out...';
+        // Update terminal with success message
+        const terminal = document.getElementById("terminal-output");
+        if (terminal) {
+            const successLine = document.createElement("div");
+            successLine.textContent = 'Successfully logged out';
+            terminal.appendChild(successLine);
+        }
+
+        return 'Successfully logged out';
+    } catch (error) {
+        return handleAuthError(error, 'Logout');
+    }
 }
 
 export function checkAuthStatus() {
+    if (!oktaAuth) {
+        return 'Authentication system is initializing...';
+    }
+    
     if (authState.isLoggingIn) {
         return 'Login in progress...';
     }
@@ -137,31 +275,4 @@ export function checkAuthStatus() {
         return `Currently logged in as ${authState.user.email}`;
     }
     return 'Not logged in';
-}
-
-// Handle the Okta callback
-export async function handleCallback() {
-    try {
-        const tokens = await oktaAuth.token.parseFromUrl();
-        oktaAuth.tokenManager.setTokens(tokens);
-        const user = await oktaAuth.getUser();
-        
-        authState = {
-            isAuthenticated: true,
-            user,
-            isLoggingIn: false,
-            isLoggingOut: false
-        };
-        
-        return `Successfully logged in as ${user.email}`;
-    } catch (error) {
-        console.error('Authentication callback error:', error);
-        authState = {
-            isAuthenticated: false,
-            user: null,
-            isLoggingIn: false,
-            isLoggingOut: false
-        };
-        return `Authentication failed: ${error.message}`;
-    }
 } 

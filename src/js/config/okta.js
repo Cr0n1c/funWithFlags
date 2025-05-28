@@ -1,4 +1,14 @@
-import env from '../config/env.js';
+import env from './env.js';
+
+// Function to get the correct redirect URI based on environment
+function getRedirectUri() {
+    // For development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return `${window.location.protocol}//${window.location.host}`;
+    }
+    // For production
+    return window.location.origin;
+}
 
 // Function to load and validate config
 function loadConfig() {
@@ -39,10 +49,15 @@ export async function getOktaConfig() {
         oktaConfig = {
             issuer: `https://${config.domain}/oauth2/default`,
             clientId: config.clientId,
-            redirectUri: window.location.origin,
+            redirectUri: getRedirectUri(),
             scopes: ['openid', 'profile', 'email'],
             pkce: true,
-            responseType: 'code'
+            responseType: ['token', 'id_token'],
+            tokenManager: {
+                storage: 'localStorage',
+                autoRenew: true,
+                autoRemove: true
+            }
         };
         return oktaConfig;
     } catch (error) {

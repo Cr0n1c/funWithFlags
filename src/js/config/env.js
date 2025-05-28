@@ -1,7 +1,9 @@
 // Environment configuration
 const env = {
-    OKTA_DOMAIN: process.env.OKTA_DOMAIN || 'dev-example.okta.com',
-    OKTA_CLIENT_ID: process.env.OKTA_CLIENT_ID || 'default_client_id'
+    // In production, these values will be replaced during build time
+    // For development, we use default values
+    OKTA_DOMAIN: 'trial-5939542.okta.com',
+    OKTA_CLIENT_ID: '0oartsuih3QYwbQws697'
 };
 
 export default env; 
