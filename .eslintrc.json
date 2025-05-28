@@ -4,19 +4,27 @@
     "es2020": true
   },
   "extends": [
-    "eslint:recommended",
+    "airbnb-typescript/base",
     "plugin:@typescript-eslint/recommended"
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": 2020,
-    "sourceType": "module"
+    "sourceType": "module",
+    "project": "./tsconfig.json"
   },
   "plugins": [
-    "@typescript-eslint"
+    "@typescript-eslint",
+    "import"
   ],
   "rules": {
     "@typescript-eslint/explicit-module-boundary-types": "off",
-    "@typescript-eslint/no-explicit-any": "warn"
+    "@typescript-eslint/no-explicit-any": "warn",
+    "import/prefer-default-export": "off",
+    "import/no-cycle": "off",
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "max-len": ["error", { "code": 100, "ignoreComments": true, "ignoreStrings": true }],
+    "no-underscore-dangle": "off",
+    "class-methods-use-this": "off"
   }
 } 

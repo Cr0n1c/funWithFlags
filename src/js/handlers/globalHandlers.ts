@@ -27,7 +27,7 @@ export function handleClick(event: MouseEvent | TouchEvent): void {
 
   input.focus();
 
-  const terminalOutput = document.getElementById("terminal-output");
+  const terminalOutput = document.getElementById('terminal-output');
   if (terminalOutput) {
     const isScrolledToBottom =
       terminalOutput.scrollHeight - terminalOutput.clientHeight <=
@@ -40,7 +40,7 @@ export function handleClick(event: MouseEvent | TouchEvent): void {
 
   // Only allow click events that originated from within the terminal container
   const target = event.target as HTMLElement;
-  if (target.closest(".terminal") !== null) {
+  if (target.closest('.terminal') !== null) {
     event.stopPropagation();
   }
 
@@ -60,9 +60,9 @@ export function theme(event: ThemeEvent): void {
   if (!event?.target?.dataset?.theme) return;
   
   const themeValue = event.target.dataset.theme;
-  document.querySelectorAll(".theme").forEach(b => b.classList.remove("active"));
-  event.target.classList.add("active");
-  document.body.className = "theme-" + themeValue;
+  document.querySelectorAll('.theme').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.body.className = 'theme-' + themeValue;
   handleClick(new MouseEvent('click'));
 }
 
@@ -77,10 +77,10 @@ export function globalListener(event: KeyboardEvent): void {
 
   const keyCode = event.keyCode;
 
-  if ((event.target as HTMLElement).matches("#terminal-input")) {
+  if ((event.target as HTMLElement).matches('#terminal-input')) {
     const target = event.target as HTMLElement;
-    target.addEventListener("click", handleClick);
-    target.addEventListener("touchstart", handleClick as EventListener);
+    target.addEventListener('click', handleClick);
+    target.addEventListener('touchstart', handleClick as EventListener);
   }
 
   if (keyCode === 122) { // F11
