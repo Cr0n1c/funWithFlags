@@ -94,6 +94,24 @@ function handleAuthError(error: AuthError, operation: string): string {
   return `${operation} failed: ${errorMessage}`;
 }
 
+// Helper function to make API calls to the server
+async function callServerApi(endpoint: string, method: string, data?: any): Promise<any> {
+  const response = await fetch(`http://localhost:3001/api${endpoint}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: data ? JSON.stringify(data) : undefined,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(`Server error: ${response.statusText}${errorData.error ? ` - ${errorData.error}` : ''}`);
+  }
+
+  return response.json();
+}
+
 // Initialize auth and set up callback handling
 async function initializeAuth(): Promise<void> {
   try {
@@ -122,7 +140,19 @@ async function initializeAuth(): Promise<void> {
 
         // Get user info using the access token
         const user = await oktaAuth.getUser();
-                
+        
+        // Store user in database via server API
+        try {
+          const serverUser = await callServerApi('/users', 'POST', {
+            email: user.email,
+            username: user.name || user.email,
+          });
+          console.log('User stored in database:', serverUser);
+        } catch (error) {
+          console.error('Failed to store user in database:', error);
+          // Continue with login even if database operation fails
+        }
+        
         authState = {
           isAuthenticated: true,
           user,
@@ -259,6 +289,13 @@ export function login(): string {
       successLine.textContent = `Successfully logged in as ${user.email}`;
       terminal.appendChild(successLine);
     }
+    // Call the server API to store user
+    return callServerApi('/users', 'POST', {
+      email: user.email,
+      username: user.name || user.email,
+    });
+  }).then(serverUser => {
+    console.log('User stored in database:', serverUser);
   }).catch((error: AuthError) => {
     handleAuthError(error, 'Login');
   });

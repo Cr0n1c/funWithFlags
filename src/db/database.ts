@@ -1,23 +1,36 @@
 /* eslint-disable import/no-extraneous-dependencies */
 import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
+import { Database } from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+
+const currentFilename = fileURLToPath(import.meta.url);
+const currentDirname = path.dirname(currentFilename);
 
 // Migration file convention: use <number>_name.up.sql for applying, <number>_name.down.sql for rollback
 // Example: 001_create_users.up.sql and 001_create_users.down.sql
 
 export class DatabaseManager {
+  private static instance: DatabaseManager;
+
   private db: Database | null = null;
 
   private readonly dbPath: string;
 
   private readonly migrationsPath: string;
 
-  constructor(dbPath: string = 'src/db/database.sqlite', migrationsPath: string = path.join(__dirname, 'migrations')) {
+  private constructor(dbPath: string = 'src/db/database.sqlite', migrationsPath: string = path.join(currentDirname, 'migrations')) {
     this.dbPath = dbPath;
     this.migrationsPath = migrationsPath;
+  }
+
+  public static getInstance(): DatabaseManager {
+    if (!DatabaseManager.instance) {
+      DatabaseManager.instance = new DatabaseManager();
+    }
+    return DatabaseManager.instance;
   }
 
   private calculateChecksum(filePath: string): string {
@@ -25,115 +38,99 @@ export class DatabaseManager {
     return crypto.createHash('sha256').update(fileContent).digest('hex');
   }
 
-  async initialize(): Promise<void> {
-    this.db = await open({
-      filename: this.dbPath,
-      driver: sqlite3.Database,
-    });
-
-    // eslint-disable-next-line no-console
-    console.log('Connected to the SQLite database.');
+  public async initialize(): Promise<Database> {
+    if (!this.db) {
+      this.db = new sqlite3.Database(this.dbPath);
+    }
+    return this.db;
   }
 
-  async runMigrations(): Promise<void> {
+  public async getDb(): Promise<Database> {
+    if (!this.db) {
+      return this.initialize();
+    }
+    return this.db;
+  }
+
+  public async runMigrations(): Promise<void> {
     if (!this.db) {
       throw new Error('Database not initialized');
     }
 
-    // Get all .up.sql migration files
-    const migrationFiles = fs.readdirSync(this.migrationsPath)
-      .filter(file => file.endsWith('.up.sql'))
+    // Create migrations table if it doesn't exist
+    await new Promise<void>((resolve, reject) => {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS migrations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          checksum TEXT NOT NULL,
+          applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          status TEXT,
+          error_message TEXT,
+          execution_time INTEGER
+        )
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Get all migration files
+    const files = fs.readdirSync(this.migrationsPath)
+      .filter(f => f.endsWith('.up.sql'))
       .sort();
 
-    // Check if migrations table exists
-    const tableExists = await this.db.get(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='migrations'
-    `);
+    // Get applied migrations
+    const appliedMigrations = await new Promise<any[]>((resolve, reject) => {
+      this.db!.all('SELECT name FROM migrations', (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
 
-    // If migrations table doesn't exist, we'll run all migrations
-    let executedMigrationMap = new Map();
-    if (tableExists) {
-      // Get executed migrations
-      const executedMigrations = await this.db.all('SELECT name, checksum FROM migrations WHERE status = ?', ['success']);
-      executedMigrationMap = new Map(executedMigrations.map(m => [m.name, m.checksum]));
-    }
-
-    // Run pending migrations
-    for (const migrationFile of migrationFiles) {
-      if (!executedMigrationMap.has(migrationFile)) {
-        const migrationPath = path.join(this.migrationsPath, migrationFile);
-        const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-        const checksum = this.calculateChecksum(migrationPath);
-        const startTime = Date.now();
-
-        await this.db.exec('BEGIN TRANSACTION');
-        try {
-          // Execute migration first
-          await this.db.exec(migrationSQL);
-          
-          // Then record it in migrations table if it exists
-          if (tableExists) {
-            // Mark migration as pending
-            await this.db.run(
-              'INSERT INTO migrations (name, status, checksum) VALUES (?, ?, ?)',
-              [migrationFile, 'pending', checksum],
-            );
-
-            // Update migration status to success
-            const executionTime = Date.now() - startTime;
-            await this.db.run(
-              'UPDATE migrations SET status = ?, execution_time = ? WHERE name = ?',
-              ['success', executionTime, migrationFile],
-            );
-          }
-
-          await this.db.exec('COMMIT');
-          // eslint-disable-next-line no-console
-          console.log(`Executed migration: ${migrationFile} (${Date.now() - startTime}ms)`);
-        } catch (error) {
-          if (tableExists) {
-            await this.db.run(
-              'UPDATE migrations SET status = ?, error_message = ? WHERE name = ?',
-              [
-                'failed',
-                error instanceof Error ? error.message : String(error),
-                migrationFile,
-              ],
-            );
-          }
-          await this.db.exec('ROLLBACK');
-          throw error;
-        }
-      } else {
-        // Verify checksum of executed migration
-        const storedChecksum = executedMigrationMap.get(migrationFile);
-        const currentChecksum = this.calculateChecksum(
-          path.join(this.migrationsPath, migrationFile),
-        );
-        
-        if (storedChecksum !== currentChecksum) {
-          throw new Error(
-            `Migration ${migrationFile} has been modified since it was executed`,
-          );
-        }
+    // Run new migrations
+    for (const file of files) {
+      if (!appliedMigrations.some((m: { name: string }) => m.name === file)) {
+        console.log(`Running migration: ${file}`);
+        const sql = fs.readFileSync(path.join(this.migrationsPath, file), 'utf8');
+        await new Promise<void>((resolve, reject) => {
+          this.db!.exec(sql, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+        await new Promise<void>((resolve, reject) => {
+          this.db!.run('INSERT INTO migrations (name, checksum) VALUES (?, ?)', [file, ''], (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+        console.log(`Completed migration: ${file}`);
       }
     }
+
+    console.log('All migrations completed successfully');
   }
 
-  async rollbackLastMigration(): Promise<void> {
+  public async rollbackLastMigration(): Promise<void> {
     if (!this.db) {
       throw new Error('Database not initialized');
     }
 
     // Get the most recently executed migration
-    const lastMigration = await this.db.get(
-      'SELECT name FROM migrations WHERE status = ? ORDER BY executed_at DESC LIMIT 1',
-      ['success'],
-    );
+    const lastMigration = await new Promise<any>((resolve, reject) => {
+      this.db!.get(
+        'SELECT name FROM migrations WHERE status = ? ORDER BY executed_at DESC LIMIT 1',
+        ['success'],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
 
     if (!lastMigration) {
-      // eslint-disable-next-line no-console
       console.log('No migrations to rollback.');
       return;
     }
@@ -149,24 +146,56 @@ export class DatabaseManager {
     const downSQL = fs.readFileSync(downPath, 'utf8');
     const startTime = Date.now();
 
-    await this.db.exec('BEGIN TRANSACTION');
+    await new Promise<void>((resolve, reject) => {
+      this.db!.exec('BEGIN TRANSACTION', (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
     try {
-      await this.db.exec(downSQL);
-      await this.db.run('DELETE FROM migrations WHERE name = ?', upFile);
-      await this.db.exec('COMMIT');
+      await new Promise<void>((resolve, reject) => {
+        this.db!.exec(downSQL, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      await new Promise<void>((resolve, reject) => {
+        this.db!.run('DELETE FROM migrations WHERE name = ?', [upFile], (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      await new Promise<void>((resolve, reject) => {
+        this.db!.exec('COMMIT', (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
       const executionTime = Date.now() - startTime;
-      // eslint-disable-next-line no-console
       console.log(`Rolled back migration: ${upFile} (${executionTime}ms)`);
     } catch (error) {
-      await this.db.exec('ROLLBACK');
+      await new Promise<void>((resolve, reject) => {
+        this.db!.exec('ROLLBACK', (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
       throw error;
     }
   }
 
-  async close(): Promise<void> {
+  public async close(): Promise<void> {
     if (this.db) {
-      await this.db.close();
+      await new Promise<void>((resolve, reject) => {
+        this.db!.close((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
       this.db = null;
     }
   }
-} 
+}
+
+export default DatabaseManager.getInstance(); 

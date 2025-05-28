@@ -3,9 +3,9 @@ import { initCursor } from './terminal/cursor.js';
 import { showWelcomeMessage } from './terminal/terminal.js';
 import { handleClick, theme, fullscreen, globalListener } from './handlers/globalHandlers.js';
 import jQuery from 'jquery';
-import moment from 'moment';
 
 // Declare jQuery and moment to be available globally
+declare const moment: any;
 declare global {
   interface Window {
     theme: typeof theme;
