@@ -19,11 +19,15 @@
   }
 
   #terminal-output {
-    font-weight: bold;
+    font-family: 'VT220';
+    font-weight: 700;
+    font-size: 20px;
     height: 100%;
     margin-bottom: 0.5em;
-    white-space: pre-wrap;
+    white-space: pre;
     overflow: hidden;
+    letter-spacing: 0;
+    line-height: 1;
   }
 
   #terminal-input-wrapper {
@@ -78,7 +82,9 @@
 #terminal-input {
   outline: none;
   cursor: none;
-  font-weight: bold;
+  font-family: 'VT220';
+  font-weight: 700;
+  font-size: 20px;
   background-color: transparent;
   border: none;
   word-break: break-all;
@@ -86,9 +92,15 @@
   caret-color: transparent;
   padding: 0;
   margin: 0;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 #input-prefix {
-  font-weight: bold;
+  font-family: 'VT220';
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0;
   margin-right: 0.5em;
 } 
