@@ -21,7 +21,6 @@
     "start:prod": "http-server dist -p 8080 -d false",
     "predeploy": "npm run build:prod && mkdir -p release && cp -R dist/* release/",
     "deploy": "gh-pages -d release --dotfiles --message 'Deploy to GitHub Pages [skip ci]' --repo https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git",
-    "postdeploy": "npm run clean",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
     "lint": "eslint 'src/**/*.{js,ts}'",
