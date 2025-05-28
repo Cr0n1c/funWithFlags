@@ -1,25 +1,20 @@
 // Helper functions
 export const pad = (n) => String(n).padStart(2, '0');
-
-// System state
 const SYSTEM_STATUS = {
-  POST: 'OK',
-  MEMORY: 'OK',
-  VIDEO: 'OK',
-  KEYBOARD: 'OK',
-  DISK: 'OK',
-  NETWORK: 'OK',
-  PARALLEL: 'OK',
-  SERIAL: 'OK'
+    POST: 'OK',
+    MEMORY: 'OK',
+    VIDEO: 'OK',
+    KEYBOARD: 'OK',
+    DISK: 'OK',
+    NETWORK: 'OK',
+    PARALLEL: 'OK',
+    SERIAL: 'OK'
 };
-
 // CMOS and time settings
 const cmosFailed = Math.random() < 0.5;
 const now = new Date();
 const currentDate = cmosFailed ? new Date(0) : now;
-
 export const formattedTime = `${pad(currentDate.getUTCMonth() + 1)}/${pad(currentDate.getUTCDate())}/${currentDate.getUTCFullYear()} ${pad(currentDate.getUTCHours())}:${pad(currentDate.getUTCMinutes())}:${pad(currentDate.getUTCSeconds())}`;
-
 // ASCII art and content sections
 const ASCII_LOGO = `
         .------..------..------..------..------..------..------..------..------.
@@ -29,9 +24,7 @@ const ASCII_LOGO = `
         | '--'x|| '--'S|| '--'E|| '--'C|| '--'U|| '--'R|| '--'I|| '--'T|| '--'Y|
         \`------'\`------'\`------'\`------'\`------'\`------'\`------'\`------'\`------'                                  
                                                   Secure Boot Environment v0.0.1`;
-
 const DIVIDER = '.......................................................................................';
-
 // Banner text with system checks
 export const banner = `
     Initializing dbt BIOS...
@@ -65,7 +58,6 @@ export const banner = `
 
     Type 'help' for a list of available commands.
 `;
-
 // Help content
 export const help = `
     * Available Commands:
@@ -75,7 +67,6 @@ export const help = `
       - about: Learn more about our CTF.
     ${DIVIDER}
 `;
-
 // About content
 export const about = `
     * About This CTF:
@@ -90,3 +81,4 @@ export const about = `
         any questions or need assistance. Good luck, and may the best team win!
     ${DIVIDER}
 `;
+//# sourceMappingURL=content.js.map

@@ -1,6 +1,7 @@
 export function scrollToBottom() {
-  const terminal = document.querySelector('.terminal');
-  if (terminal) {
-    terminal.scrollTop = terminal.scrollHeight;
-  }
+    const terminal = document.querySelector('.terminal');
+    if (terminal) {
+        terminal.scrollTop = terminal.scrollHeight;
+    }
 }
+//# sourceMappingURL=utils.js.map

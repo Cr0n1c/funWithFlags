@@ -1,8 +1,6 @@
 import { initOktaAuth } from '../config/okta.js';
-
 // Initialize Okta Auth
 let oktaAuth = null;
-
 // Auth state management
 let authState = {
     isAuthenticated: false,
@@ -10,40 +8,31 @@ let authState = {
     isLoggingIn: false,
     isLoggingOut: false
 };
-
 // Check if third-party cookies are enabled
 function checkThirdPartyCookies() {
     return new Promise((resolve) => {
         const testCookie = 'okta-cookie-test';
-        
         // Try to set a test cookie
         document.cookie = testCookie + '=1; SameSite=None; Secure';
-        
         // Check if the cookie was set
         const cookieEnabled = document.cookie.indexOf(testCookie) !== -1;
-        
         // Clean up test cookie
         document.cookie = testCookie + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=None; Secure';
-        
         resolve(cookieEnabled);
     });
 }
-
 // Helper function to handle auth errors
 function handleAuthError(error, operation) {
     console.error(`${operation} error:`, error);
-    
     let errorMessage = error.message;
     if (error.name === 'AuthApiError' && error.message.includes('Failed to fetch')) {
         errorMessage = 'Unable to connect to Okta. Please check your network connection and ensure this domain is allowed in your Okta CORS settings.';
     }
-
     // Check for cookie-related errors
-    if (error.message?.toLowerCase().includes('cookie') || 
+    if (error.message?.toLowerCase().includes('cookie') ||
         error.name === 'AuthApiError' && error.errorCode === 'invalid_session') {
         errorMessage = 'Third-party cookies appear to be blocked. Please enable third-party cookies for this site or use a different browser.';
     }
-
     // Reset auth state
     authState = {
         isAuthenticated: false,
@@ -51,7 +40,6 @@ function handleAuthError(error, operation) {
         isLoggingIn: false,
         isLoggingOut: false
     };
-
     // Update terminal with error message
     const terminal = document.getElementById("terminal-output");
     if (terminal) {
@@ -59,10 +47,8 @@ function handleAuthError(error, operation) {
         errorLine.textContent = `${operation} failed: ${errorMessage}`;
         terminal.appendChild(errorLine);
     }
-
     return errorMessage;
 }
-
 // Initialize auth and set up callback handling
 async function initializeAuth() {
     try {
@@ -76,9 +62,7 @@ async function initializeAuth() {
                 terminal.appendChild(warningLine);
             }
         }
-
         oktaAuth = await initOktaAuth();
-        
         // Check if we're handling a callback
         if (window.location.search.includes('code=') || window.location.hash.includes('access_token=')) {
             const terminal = document.getElementById("terminal-output");
@@ -87,41 +71,35 @@ async function initializeAuth() {
                 newLine.textContent = 'Processing login...';
                 terminal.appendChild(newLine);
             }
-            
             try {
                 const tokens = await oktaAuth.token.parseFromUrl();
                 await oktaAuth.tokenManager.setTokens(tokens.tokens);
-                
                 // Get the access token
                 const accessToken = await oktaAuth.tokenManager.get('accessToken');
                 if (!accessToken) {
                     throw new Error('No access token available');
                 }
-
                 // Get user info using the access token
                 const user = await oktaAuth.getUser();
-                
                 authState = {
                     isAuthenticated: true,
                     user,
                     isLoggingIn: false,
                     isLoggingOut: false
                 };
-
                 // Clear the URL parameters
                 window.history.replaceState({}, document.title, window.location.pathname);
-                
                 // Update terminal with success message
                 if (terminal) {
                     const successLine = document.createElement("div");
                     successLine.textContent = `Successfully logged in as ${user.email}`;
                     terminal.appendChild(successLine);
                 }
-            } catch (error) {
+            }
+            catch (error) {
                 handleAuthError(error, 'Login');
             }
         }
-
         // Check authentication state
         const authenticated = await oktaAuth.isAuthenticated();
         if (authenticated) {
@@ -131,7 +109,6 @@ async function initializeAuth() {
                 if (!accessToken) {
                     throw new Error('No access token available');
                 }
-
                 // Get user info using the access token
                 const user = await oktaAuth.getUser();
                 authState = {
@@ -140,37 +117,32 @@ async function initializeAuth() {
                     isLoggingIn: false,
                     isLoggingOut: false
                 };
-            } catch (error) {
+            }
+            catch (error) {
                 handleAuthError(error, 'Authentication check');
             }
         }
-    } catch (error) {
+    }
+    catch (error) {
         handleAuthError(error, 'Authentication initialization');
     }
 }
-
 // Initialize auth on page load
 initializeAuth();
-
 export function getAuthState() {
     return authState;
 }
-
 export function login() {
     if (!oktaAuth) {
         return 'Authentication system is not initialized yet. Please try again in a moment.';
     }
-
     if (authState.isAuthenticated) {
         return `Already logged in as ${authState.user?.email || 'unknown user'}`;
     }
-    
     if (authState.isLoggingIn) {
         return 'Login in progress...';
     }
-
     authState.isLoggingIn = true;
-
     // Check cookie support before proceeding
     checkThirdPartyCookies().then(cookiesEnabled => {
         if (!cookiesEnabled) {
@@ -182,18 +154,19 @@ export function login() {
                 terminal.appendChild(warningLine);
             }
         }
-        
         // Start Okta login process with token response type
         return oktaAuth.token.getWithPopup({
             responseType: ['token', 'id_token']
         });
     }).then(tokens => {
-        if (!tokens) return; // Skip if cookies check failed
+        if (!tokens)
+            return; // Skip if cookies check failed
         return oktaAuth.tokenManager.setTokens(tokens.tokens);
     }).then(() => {
         return oktaAuth.getUser();
     }).then(user => {
-        if (!user) return; // Skip if previous steps failed
+        if (!user)
+            return; // Skip if previous steps failed
         authState = {
             isAuthenticated: true,
             user,
@@ -207,32 +180,25 @@ export function login() {
             successLine.textContent = `Successfully logged in as ${user.email}`;
             terminal.appendChild(successLine);
         }
-    }).catch(error => {
+    }).catch((error) => {
         handleAuthError(error, 'Login');
     });
-
     return 'Initiating login process...';
 }
-
 export function logout() {
     if (!oktaAuth) {
         return 'Authentication system is not initialized yet. Please try again in a moment.';
     }
-
     if (!authState.isAuthenticated) {
         return 'Not currently logged in';
     }
-    
     if (authState.isLoggingOut) {
         return 'Logout in progress...';
     }
-
     authState.isLoggingOut = true;
-    
     try {
         // Clear tokens synchronously
         oktaAuth.tokenManager.clear();
-        
         // Update state immediately
         authState = {
             isAuthenticated: false,
@@ -240,12 +206,10 @@ export function logout() {
             isLoggingIn: false,
             isLoggingOut: false
         };
-        
         // Close the session without redirecting
-        oktaAuth.closeSession().catch(error => {
+        oktaAuth.closeSession().catch((error) => {
             console.warn('Session cleanup warning:', error);
         });
-
         // Update terminal with success message
         const terminal = document.getElementById("terminal-output");
         if (terminal) {
@@ -253,18 +217,16 @@ export function logout() {
             successLine.textContent = 'Successfully logged out';
             terminal.appendChild(successLine);
         }
-
         return 'Successfully logged out';
-    } catch (error) {
+    }
+    catch (error) {
         return handleAuthError(error, 'Logout');
     }
 }
-
 export function checkAuthStatus() {
     if (!oktaAuth) {
         return 'Authentication system is initializing...';
     }
-    
     if (authState.isLoggingIn) {
         return 'Login in progress...';
     }
@@ -275,4 +237,5 @@ export function checkAuthStatus() {
         return `Currently logged in as ${authState.user.email}`;
     }
     return 'Not logged in';
-} 
+}
+//# sourceMappingURL=authService.js.map
