@@ -28,14 +28,6 @@
     font-display: swap;
 }
 
-@font-face {
-    font-family: 'VT323';
-    src: url('../fonts/VT323-Regular.ttf') format('truetype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
 i.icon-weather {
   color: var(--primary-color);
   font-family: weather;
