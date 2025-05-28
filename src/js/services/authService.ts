@@ -1,10 +1,24 @@
 import { initOktaAuth } from '../config/okta.js';
 
+// Define interfaces for our types
+interface AuthState {
+    isAuthenticated: boolean;
+    user: any | null; // We'll keep this as any for now since we don't have the Okta user type
+    isLoggingIn: boolean;
+    isLoggingOut: boolean;
+}
+
+interface AuthError extends Error {
+    name: string;
+    errorCode?: string;
+    message: string;
+}
+
 // Initialize Okta Auth
-let oktaAuth = null;
+let oktaAuth: any | null = null;
 
 // Auth state management
-let authState = {
+let authState: AuthState = {
     isAuthenticated: false,
     user: null,
     isLoggingIn: false,
@@ -12,7 +26,7 @@ let authState = {
 };
 
 // Check if third-party cookies are enabled
-function checkThirdPartyCookies() {
+function checkThirdPartyCookies(): Promise<boolean> {
     return new Promise((resolve) => {
         const testCookie = 'okta-cookie-test';
         
@@ -30,7 +44,7 @@ function checkThirdPartyCookies() {
 }
 
 // Helper function to handle auth errors
-function handleAuthError(error, operation) {
+function handleAuthError(error: AuthError, operation: string): string {
     console.error(`${operation} error:`, error);
     
     let errorMessage = error.message;
@@ -64,7 +78,7 @@ function handleAuthError(error, operation) {
 }
 
 // Initialize auth and set up callback handling
-async function initializeAuth() {
+async function initializeAuth(): Promise<void> {
     try {
         // Check third-party cookie support first
         const cookiesEnabled = await checkThirdPartyCookies();
@@ -118,7 +132,7 @@ async function initializeAuth() {
                     terminal.appendChild(successLine);
                 }
             } catch (error) {
-                handleAuthError(error, 'Login');
+                handleAuthError(error as AuthError, 'Login');
             }
         }
 
@@ -141,22 +155,22 @@ async function initializeAuth() {
                     isLoggingOut: false
                 };
             } catch (error) {
-                handleAuthError(error, 'Authentication check');
+                handleAuthError(error as AuthError, 'Authentication check');
             }
         }
     } catch (error) {
-        handleAuthError(error, 'Authentication initialization');
+        handleAuthError(error as AuthError, 'Authentication initialization');
     }
 }
 
 // Initialize auth on page load
 initializeAuth();
 
-export function getAuthState() {
+export function getAuthState(): AuthState {
     return authState;
 }
 
-export function login() {
+export function login(): string {
     if (!oktaAuth) {
         return 'Authentication system is not initialized yet. Please try again in a moment.';
     }
@@ -184,14 +198,14 @@ export function login() {
         }
         
         // Start Okta login process with token response type
-        return oktaAuth.token.getWithPopup({
+        return oktaAuth!.token.getWithPopup({
             responseType: ['token', 'id_token']
         });
     }).then(tokens => {
         if (!tokens) return; // Skip if cookies check failed
-        return oktaAuth.tokenManager.setTokens(tokens.tokens);
+        return oktaAuth!.tokenManager.setTokens(tokens.tokens);
     }).then(() => {
-        return oktaAuth.getUser();
+        return oktaAuth!.getUser();
     }).then(user => {
         if (!user) return; // Skip if previous steps failed
         authState = {
@@ -207,14 +221,14 @@ export function login() {
             successLine.textContent = `Successfully logged in as ${user.email}`;
             terminal.appendChild(successLine);
         }
-    }).catch(error => {
+    }).catch((error: AuthError) => {
         handleAuthError(error, 'Login');
     });
 
     return 'Initiating login process...';
 }
 
-export function logout() {
+export function logout(): string {
     if (!oktaAuth) {
         return 'Authentication system is not initialized yet. Please try again in a moment.';
     }
@@ -242,7 +256,7 @@ export function logout() {
         };
         
         // Close the session without redirecting
-        oktaAuth.closeSession().catch(error => {
+        oktaAuth.closeSession().catch((error: unknown) => {
             console.warn('Session cleanup warning:', error);
         });
 
@@ -256,11 +270,11 @@ export function logout() {
 
         return 'Successfully logged out';
     } catch (error) {
-        return handleAuthError(error, 'Logout');
+        return handleAuthError(error as AuthError, 'Logout');
     }
 }
 
-export function checkAuthStatus() {
+export function checkAuthStatus(): string {
     if (!oktaAuth) {
         return 'Authentication system is initializing...';
     }

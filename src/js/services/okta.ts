@@ -1,17 +1,22 @@
-import env from './env.js';
+import env from '../config/env.js';
+import { OktaAuth, OAuthResponseType } from '@okta/okta-auth-js';
 
-// Function to get the correct redirect URI based on environment
-function getRedirectUri() {
-    // For development
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return `${window.location.protocol}//${window.location.host}`;
-    }
-    // For production
-    return window.location.origin;
+interface OktaConfig {
+    domain: string;
+    clientId: string;
+}
+
+interface OktaAuthConfig {
+    issuer: string;
+    clientId: string;
+    redirectUri: string;
+    scopes: string[];
+    pkce: boolean;
+    responseType: OAuthResponseType;
 }
 
 // Function to load and validate config
-function loadConfig() {
+function loadConfig(): OktaConfig {
     try {
         // Read from environment configuration
         const domain = env.OKTA_DOMAIN;
@@ -36,10 +41,10 @@ function loadConfig() {
 }
 
 // Initialize config
-let oktaConfig = null;
+let oktaConfig: OktaAuthConfig | null = null;
 
 // Load config and create Okta config object
-export async function getOktaConfig() {
+export async function getOktaConfig(): Promise<OktaAuthConfig> {
     if (oktaConfig) {
         return oktaConfig;
     }
@@ -49,22 +54,17 @@ export async function getOktaConfig() {
         oktaConfig = {
             issuer: `https://${config.domain}/oauth2/default`,
             clientId: config.clientId,
-            redirectUri: getRedirectUri(),
+            redirectUri: window.location.origin,
             scopes: ['openid', 'profile', 'email'],
             pkce: true,
-            responseType: ['token', 'id_token'],
-            tokenManager: {
-                storage: 'localStorage',
-                autoRenew: true,
-                autoRemove: true
-            }
+            responseType: 'code'
         };
         return oktaConfig;
     } catch (error) {
         const terminal = document.getElementById("terminal-output");
         if (terminal) {
             const errorLine = document.createElement("div");
-            errorLine.textContent = `Error initializing Okta: ${error.message}`;
+            errorLine.textContent = `Error initializing Okta: ${error instanceof Error ? error.message : 'Unknown error'}`;
             errorLine.style.color = 'red';
             terminal.appendChild(errorLine);
         }
@@ -73,7 +73,7 @@ export async function getOktaConfig() {
 }
 
 // Export a function to initialize Okta auth
-export async function initOktaAuth() {
+export async function initOktaAuth(): Promise<OktaAuth> {
     const config = await getOktaConfig();
-    return new window.OktaAuth(config);
+    return new OktaAuth(config);
 } 

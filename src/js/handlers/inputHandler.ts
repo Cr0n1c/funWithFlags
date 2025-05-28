@@ -5,7 +5,7 @@ import { scrollToBottom } from './utils.js';
 const keySound = new Audio('sounds/keypress.mp3');
 keySound.volume = 0.4;
 
-let commandHistory = [];
+const commandHistory: string[] = [];
 let commandIndex = -1;
 
 const terminalInput = document.getElementById('terminal-input');
@@ -13,31 +13,33 @@ if (terminalInput) {
   terminalInput.addEventListener('keydown', handleInput);
 
   // Also globally listen
-  document.addEventListener('keydown', (event) => {
+  document.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event?.target !== terminalInput) {
       terminalInput.focus();
-      const soundClone = keySound.cloneNode();
+      const soundClone = keySound.cloneNode() as HTMLAudioElement;
       soundClone.play().catch(e => console.warn("Keypress sound blocked:", e));
     }
   });
 }
 
-export async function handleInput(event) {
+export async function handleInput(event: KeyboardEvent): Promise<void> {
   if (!event?.target) return;
 
   const terminalOutput = document.getElementById("terminal-output");
-  const terminalInput = event.target;
+  const terminalInput = event.target as HTMLElement;
   
   // Play typing sound for any key that's "printable"
   if (event.key?.length === 1 || event.key === "Backspace") {
-    const soundClone = keySound.cloneNode();
+    const soundClone = keySound.cloneNode() as HTMLAudioElement;
     soundClone.play().catch(e => console.warn("Keypress sound blocked:", e));
   }
 
   switch (event.key) {
     case "Enter":
       event.preventDefault();
-      await handleEnterKey(terminalOutput, terminalInput);
+      if (terminalOutput) {
+        await handleEnterKey(terminalOutput, terminalInput);
+      }
       break;
     case "ArrowUp":
       event.preventDefault();
@@ -58,8 +60,8 @@ export async function handleInput(event) {
   }
 }
 
-async function handleEnterKey(terminalOutput, terminalInput) {
-  if (!terminalOutput || !terminalInput) return;
+async function handleEnterKey(terminalOutput: HTMLElement, terminalInput: HTMLElement): Promise<void> {
+  if (!terminalInput) return;
 
   const inputText = terminalInput.innerText.trim();
   const outputText = processCommand(inputText);
@@ -74,7 +76,11 @@ async function handleEnterKey(terminalOutput, terminalInput) {
       
       terminalInput.innerText = "";
       const inputPrefix = document.getElementById("input-prefix");
-      await animateText(newOutputLine, inputPrefix?.textContent || "", 10, terminalInput, inputPrefix);
+      if (inputPrefix) {
+        await animateText(newOutputLine, inputPrefix.textContent || "", 10, terminalInput, inputPrefix);
+      } else {
+        await animateText(newOutputLine, "", 10, terminalInput);
+      }
     }
 
     await animateText(newOutputLine, outputText, 10, terminalInput);
@@ -85,7 +91,7 @@ async function handleEnterKey(terminalOutput, terminalInput) {
   terminalInput.focus();
 }
 
-function handleArrowUp(terminalInput) {
+function handleArrowUp(terminalInput: HTMLElement): void {
   if (!terminalInput) return;
   
   if (commandIndex > 0) {
@@ -94,7 +100,7 @@ function handleArrowUp(terminalInput) {
   }
 }
 
-function handleArrowDown(terminalInput) {
+function handleArrowDown(terminalInput: HTMLElement): void {
   if (!terminalInput) return;
 
   if (commandIndex < commandHistory.length - 1) {
@@ -106,13 +112,13 @@ function handleArrowDown(terminalInput) {
   }
 }
 
-function handleEscape(terminalInput) {
+function handleEscape(terminalInput: HTMLElement): void {
   if (terminalInput) {
     terminalInput.innerText = "";
   }
 }
 
-function handleTab(terminalInput) {
+function handleTab(terminalInput: HTMLElement): void {
   if (!terminalInput) return;
 
   const inputText = terminalInput.innerText.trim();
@@ -124,3 +130,9 @@ function handleTab(terminalInput) {
     console.log("Suggestions:", suggestions.join(", "));
   }
 }
+
+// Helper function to get autocomplete suggestions
+function getAutocompleteSuggestions(input: string): string[] {
+  const commands = ["help", "date", "clear", "about", "login", "logout", "status"];
+  return commands.filter(cmd => cmd.startsWith(input.toLowerCase()));
+} 

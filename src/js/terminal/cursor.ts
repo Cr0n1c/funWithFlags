@@ -1,4 +1,4 @@
-export function initCursor() {
+export function initCursor(): void {
   const terminalInput = document.getElementById("terminal-input");
   if (!terminalInput) return;
 
@@ -10,8 +10,8 @@ export function initCursor() {
   
   parent.appendChild(cursor);
 
-  const toggleCursor = (show) => cursor.classList.toggle("cursor", show);
+  const toggleCursor = (show: boolean): boolean => cursor.classList.toggle("cursor", show);
   
   terminalInput.addEventListener("focus", () => toggleCursor(true));
   terminalInput.addEventListener("blur", () => toggleCursor(false));
-}
+} 
