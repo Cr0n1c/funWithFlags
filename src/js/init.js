@@ -18,6 +18,4 @@ export function init() {
   terminalInput.addEventListener("keydown", handleInput);
 }
 
-function initTerminal() {
-  // ... existing code ...
-}
+// Removed unused initTerminal function
