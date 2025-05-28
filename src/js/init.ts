@@ -1,7 +1,7 @@
 import { handleInput } from './handlers/inputHandler.js';
 import { handleClick } from './handlers/globalHandlers.js';
 
-export function init() {
+export function init(): void {
   const terminalInput = document.getElementById("terminal-input");
   if (!terminalInput) return;
 
@@ -16,6 +16,4 @@ export function init() {
   });
   
   terminalInput.addEventListener("keydown", handleInput);
-}
-
-// Removed unused initTerminal function
+} 

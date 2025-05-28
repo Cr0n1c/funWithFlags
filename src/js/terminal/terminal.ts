@@ -1,8 +1,8 @@
 import { banner, about, help } from "../config/content.js";
 import { scrollToBottom } from '../handlers/utils.js';
-import { login, logout, checkAuthStatus, getAuthState } from '../services/authService.js';
+import { login, logout, checkAuthStatus } from '../services/authService.js';
 
-export async function showWelcomeMessage() {
+export async function showWelcomeMessage(): Promise<void> {
     const terminalOutput = document.getElementById("terminal-output");
     if (!terminalOutput) return;
 
@@ -51,43 +51,57 @@ export async function showWelcomeMessage() {
     scrollToBottom();
 }
 
-export function processCommand(inputText) {
+export function processCommand(inputText: string | null): string {
     if (!inputText?.trim()) return '';
 
     const command = inputText.toLowerCase().trim();
     const userCommand = `${inputText}\n`;
+    let terminal: HTMLElement | null;
+    let response: string;
 
     switch (command) {
       case "help":
-        return userCommand + help;
+        response = help;
+        break;
       case "date":
-        return userCommand + new Date().toLocaleString();
+        response = new Date().toLocaleString();
+        break;
       case "clear":
-        const terminal = document.getElementById("terminal-output");
+        terminal = document.getElementById("terminal-output");
         if (terminal) terminal.innerHTML = "";
         return "";
       case "about":
-        return userCommand + about;
+        response = about;
+        break;
       case "login":
-        const loginResponse = login();
-        return userCommand + loginResponse;
+        response = login();
+        break;
       case "logout":
-        const logoutResponse = logout();
-        return userCommand + logoutResponse;
+        response = logout();
+        break;
       case "status":
-        const statusResponse = checkAuthStatus();
-        return userCommand + statusResponse;
+        response = checkAuthStatus();
+        break;
       default:
-        return userCommand + `Unknown command: ${inputText}`;
+        response = `Unknown command: ${inputText}`;
     }
+
+    return userCommand + response;
 }
 
-let userInteracted = false;
 document.addEventListener("click", () => {
-    userInteracted = true;
+    // This event listener is used to track user interaction
+    // It may be used by other parts of the application
+    return;
 });
   
-export async function animateText(element, text, delay = 10, terminalInput, inputPrefix) {
+export async function animateText(
+    element: HTMLElement,
+    text: string | null | undefined,
+    delay: number = 10,
+    terminalInput?: HTMLElement,
+    inputPrefix?: HTMLElement
+): Promise<void> {
     if (!element) return;
     
     // Convert text to string and handle null/undefined
@@ -124,17 +138,19 @@ export async function animateText(element, text, delay = 10, terminalInput, inpu
     }
 }
 
-async function animateMemoryCount(element, targetValue, duration = 2000) {
+async function animateMemoryCount(element: HTMLElement, targetValue: number, duration: number = 2000): Promise<void> {
   const start = performance.now();
   const startValue = 0;
 
   return new Promise(resolve => {
-    function update(currentTime) {
+    function update(currentTime: number): void {
       const elapsed = currentTime - start;
       const progress = Math.min(elapsed / duration, 1);
 
       const currentValue = Math.floor(startValue + (targetValue - startValue) * progress);
-      element.textContent = element.textContent.replace(/\d+K/, `${currentValue}K`);
+      if (element.textContent) {
+        element.textContent = element.textContent.replace(/\d+K/, `${currentValue}K`);
+      }
 
       if (progress < 1) {
         requestAnimationFrame(update);
@@ -145,4 +161,4 @@ async function animateMemoryCount(element, targetValue, duration = 2000) {
 
     requestAnimationFrame(update);
   });
-}
+} 

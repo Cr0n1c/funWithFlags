@@ -9,19 +9,23 @@
   ],
   "scripts": {
     "clean": "rm -rf dist release",
-    "copy-src": "mkdir -p dist && rsync -av --exclude='sass' src/ dist/",
+    "copy-src": "mkdir -p dist && rsync -av --exclude='sass' --exclude='*.ts' --exclude='*.js' src/ dist/",
     "sass": "sass src/sass/:dist/css/ --style compressed",
     "sass:watch": "sass --watch src/sass:dist/css --style expanded",
     "minify:html": "minify src/index.html > dist/index.html",
     "prebuild:dev": "npm run clean",
-    "build:dev": "npm run copy-src && npm run sass",
+    "build:dev": "tsc && npm run copy-src && npm run sass",
     "start:dev": "chmod +x scripts/dev.sh && ./scripts/dev.sh",
     "prebuild:prod": "npm run clean",
-    "build:prod": "npm run copy-src && npm run sass && npm run minify:html",
+    "build:prod": "tsc && npm run copy-src && npm run sass && npm run minify:html",
     "start:prod": "http-server dist -p 8080 -d false",
     "predeploy": "npm run build:prod && mkdir -p release && cp -R dist/* release/",
     "deploy": "gh-pages -d release --dotfiles --message 'Deploy to GitHub Pages [skip ci]' --repo https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git",
-    "postdeploy": "npm run clean"
+    "postdeploy": "npm run clean",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --noEmit --watch",
+    "lint": "eslint 'src/**/*.{js,ts}'",
+    "lint:fix": "eslint 'src/**/*.{js,ts}' --fix"
   },
   "private": true,
   "license": "MIT",
@@ -34,12 +38,23 @@
     "email": "bhelms85@gmail.com"
   },
   "devDependencies": {
+    "@types/jquery": "^3.5.32",
+    "@types/moment": "^2.11.29",
+    "@types/node": "^20.11.19",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
     "concat-cli": "^4.0.0",
     "csso-cli": "^4.0.2",
+    "eslint": "^8.56.0",
     "gh-pages": "^6.3.0",
     "http-server": "^14.1.1",
     "minify": "^14.0.0",
     "nodemon": "^3.1.10",
-    "sass": "^1.89.0"
+    "sass": "^1.89.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@okta/okta-auth-js": "^7.12.1"
   }
 }

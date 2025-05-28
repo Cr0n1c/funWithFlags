@@ -1,4 +1,4 @@
-const AVAILABLE_COMMANDS = [
+const AVAILABLE_COMMANDS: string[] = [
   "about",
   "challenges",
   "clear",
@@ -10,10 +10,10 @@ const AVAILABLE_COMMANDS = [
   "submit"
 ];
 
-export function getAutocompleteSuggestions(inputText) {
+export function getAutocompleteSuggestions(inputText: string | undefined): string[] {
   if (!inputText?.trim()) return [];
   
   return AVAILABLE_COMMANDS.filter(command => 
     command.startsWith(inputText.toLowerCase().trim())
   );
-}
+} 
