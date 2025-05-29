@@ -21,7 +21,7 @@ export class DatabaseManager {
 
   private readonly migrationsPath: string;
 
-  private constructor(dbPath: string = 'src/db/database.sqlite', migrationsPath: string = path.join(currentDirname, 'migrations')) {
+  private constructor(dbPath: string = path.resolve(currentDirname, '../../db/database.sqlite'), migrationsPath: string = path.join(currentDirname, 'migrations')) {
     this.dbPath = dbPath;
     this.migrationsPath = migrationsPath;
   }
@@ -82,8 +82,8 @@ export class DatabaseManager {
       .sort();
 
     // Get applied migrations
-    const appliedMigrations = await new Promise<any[]>((resolve, reject) => {
-      this.db!.all('SELECT name FROM migrations', (err, rows) => {
+    const appliedMigrations = await new Promise<Array<{ name: string }>>((resolve, reject) => {
+      this.db!.all<{ name: string }>('SELECT name FROM migrations', (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
       });
@@ -91,7 +91,8 @@ export class DatabaseManager {
 
     // Run new migrations
     for (const file of files) {
-      if (!appliedMigrations.some((m: { name: string }) => m.name === file)) {
+      if (!appliedMigrations.some((m) => m.name === file)) {
+        // eslint-disable-next-line no-console
         console.log(`Running migration: ${file}`);
         const sql = fs.readFileSync(path.join(this.migrationsPath, file), 'utf8');
         await new Promise<void>((resolve, reject) => {
@@ -106,10 +107,12 @@ export class DatabaseManager {
             else resolve();
           });
         });
+        // eslint-disable-next-line no-console
         console.log(`Completed migration: ${file}`);
       }
     }
 
+    // eslint-disable-next-line no-console
     console.log('All migrations completed successfully');
   }
 
@@ -119,18 +122,19 @@ export class DatabaseManager {
     }
 
     // Get the most recently executed migration
-    const lastMigration = await new Promise<any>((resolve, reject) => {
-      this.db!.get(
+    const lastMigration = await new Promise<{ name: string } | undefined>((resolve, reject) => {
+      this.db!.get<{ name: string }>(
         'SELECT name FROM migrations WHERE status = ? ORDER BY executed_at DESC LIMIT 1',
         ['success'],
         (err, row) => {
           if (err) reject(err);
           else resolve(row);
-        }
+        },
       );
     });
 
     if (!lastMigration) {
+      // eslint-disable-next-line no-console
       console.log('No migrations to rollback.');
       return;
     }
@@ -173,6 +177,7 @@ export class DatabaseManager {
         });
       });
       const executionTime = Date.now() - startTime;
+      // eslint-disable-next-line no-console
       console.log(`Rolled back migration: ${upFile} (${executionTime}ms)`);
     } catch (error) {
       await new Promise<void>((resolve, reject) => {

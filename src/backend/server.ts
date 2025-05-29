@@ -4,6 +4,11 @@ import { Database } from 'sqlite';
 import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,34 +19,33 @@ app.use(cors());
 let db: Database;
 
 // Utility to wrap async route handlers
-function asyncHandler(fn: (req: Request, res: Response, next?: any) => Promise<any>) {
-  return function (req: Request, res: Response, next: any) {
+function asyncHandler(
+  fn: (req: Request, res: Response, next?: (err?: Error) => void) => Promise<unknown>,
+) {
+  return function (req: Request, res: Response, next: (err?: Error) => void) {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
 
 // Initialize SQLite connection
 async function initDb() {
+  const dbPath = path.resolve(__dirname, '../../db/database.sqlite');
   db = await open({
-    filename: '../db/database.sqlite',
+    filename: dbPath,
     driver: sqlite3.Database,
   });
 }
 
-// Log 404 requests
-app.use((req: Request, res: Response, next: any) => {
-  console.log(`404 Not Found: ${req.method} ${req.url}`);
-  next();
-});
-
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {
+  // eslint-disable-next-line no-console
   console.log('GET /api/health called');
   res.json({ status: 'ok' });
 });
 
 // Example: Create or update user
 app.post('/api/users', asyncHandler(async (req: Request, res: Response) => {
+  // eslint-disable-next-line no-console
   console.log('POST /api/users called with:', req.body);
   const { email, username } = req.body;
   if (!email || !username) {
@@ -77,9 +81,17 @@ app.post('/api/audit', asyncHandler(async (req: Request, res: Response) => {
   }
 }));
 
+// Log 404 requests - moved to end of route definitions
+app.use((req: Request, res: Response, next: (err?: Error) => void) => {
+  // eslint-disable-next-line no-console
+  console.log(`404 Not Found: ${req.method} ${req.url}`);
+  next();
+});
+
 // Start server after DB is ready
 initDb().then(() => {
   app.listen(PORT, () => {
+    // eslint-disable-next-line no-console
     console.log(`Express server running on http://localhost:${PORT}`);
   });
 }); 

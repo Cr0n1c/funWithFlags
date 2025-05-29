@@ -21,7 +21,7 @@ async function handleEnterKey(
   if (!inputElement) return;
 
   const inputText = inputElement.innerText.trim();
-  const outputText = processCommand(inputText);
+  const outputText = await processCommand(inputText);
 
   if (outputText) {
     const newOutputLine = document.createElement('div');

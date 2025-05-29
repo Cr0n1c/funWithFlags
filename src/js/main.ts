@@ -5,7 +5,13 @@ import { handleClick, theme, fullscreen, globalListener } from './handlers/globa
 import jQuery from 'jquery';
 
 // Declare jQuery and moment to be available globally
-declare const moment: any;
+declare const moment: {
+  (): {
+    format: (format: string) => string;
+  };
+  format: (format: string) => string;
+};
+
 declare global {
   interface Window {
     theme: typeof theme;

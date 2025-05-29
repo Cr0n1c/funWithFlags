@@ -38,6 +38,11 @@ interface AuthError extends Error {
   message: string;
 }
 
+interface ServerResponse {
+  error?: string;
+  [key: string]: unknown;
+}
+
 // Initialize Okta Auth
 let oktaAuth: OktaAuth | null = null;
 
@@ -95,7 +100,11 @@ function handleAuthError(error: AuthError, operation: string): string {
 }
 
 // Helper function to make API calls to the server
-async function callServerApi(endpoint: string, method: string, data?: any): Promise<any> {
+async function callServerApi(
+  endpoint: string,
+  method: string,
+  data?: Record<string, unknown>,
+): Promise<ServerResponse> {
   const response = await fetch(`http://localhost:3001/api${endpoint}`, {
     method,
     headers: {
@@ -106,7 +115,11 @@ async function callServerApi(endpoint: string, method: string, data?: any): Prom
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(`Server error: ${response.statusText}${errorData.error ? ` - ${errorData.error}` : ''}`);
+    throw new Error(
+      `Server error: ${response.statusText}${
+        errorData.error ? ` - ${errorData.error}` : ''
+      }`,
+    );
   }
 
   return response.json();
@@ -118,7 +131,8 @@ async function initializeAuth(): Promise<void> {
     // Check third-party cookie support first
     const cookiesEnabled = await checkThirdPartyCookies();
     if (!cookiesEnabled) {
-      console.warn('Third-party cookies are disabled. This may affect login functionality.');
+      // Third-party cookies are disabled, but we'll continue anyway
+      // The login process will handle any cookie-related errors
     }
 
     oktaAuth = await initOktaAuth();
@@ -143,11 +157,10 @@ async function initializeAuth(): Promise<void> {
         
         // Store user in database via server API
         try {
-          const serverUser = await callServerApi('/users', 'POST', {
+          await callServerApi('/users', 'POST', {
             email: user.email,
             username: user.name || user.email,
           });
-          console.log('User stored in database:', serverUser);
         } catch (error) {
           console.error('Failed to store user in database:', error);
           // Continue with login even if database operation fails
@@ -238,69 +251,59 @@ export function getAuthState(): AuthState {
   return authState;
 }
 
-export function login(): string {
+export async function login(): Promise<string> {
   if (!oktaAuth) {
-    return 'Authentication system is not initialized yet. Please try again in a moment.';
+    throw new Error('Okta auth not initialized');
   }
 
-  if (authState.isAuthenticated) {
-    return `Already logged in as ${authState.user?.email || 'unknown user'}`;
-  }
+  try {
+    authState.isLoggingIn = true;
+    const tokens = await oktaAuth.token.getWithPopup({ responseType: ['token', 'id_token'] });
+    await oktaAuth.tokenManager.setTokens(tokens.tokens);
+    const user = await oktaAuth.getUser();
     
-  if (authState.isLoggingIn) {
-    return 'Login in progress...';
-  }
+    // eslint-disable-next-line no-console
+    console.log('Login successful:', user);
 
-  authState.isLoggingIn = true;
-
-  // Check cookie support before proceeding
-  checkThirdPartyCookies().then(cookiesEnabled => {
-    if (!cookiesEnabled) {
-      authState.isLoggingIn = false;
-      const terminal = document.getElementById('terminal-output');
-      if (terminal) {
-        const warningLine = document.createElement('div');
-        warningLine.textContent = 'Warning: Third-party cookies are disabled. Login may not work properly. Please enable third-party cookies for this site.';
-        terminal.appendChild(warningLine);
-      }
+    // Update terminal with success message
+    const terminal = document.getElementById('terminal-output');
+    if (terminal) {
+      const successLine = document.createElement('div');
+      successLine.textContent = 'Login successful!';
+      terminal.appendChild(successLine);
+      const welcomeLine = document.createElement('div');
+      welcomeLine.textContent = `Welcome, ${user.name || user.email}!`;
+      terminal.appendChild(welcomeLine);
     }
-        
-    // Start Okta login process with token response type
-    return oktaAuth!.token.getWithPopup({
-      responseType: ['token', 'id_token'],
-    });
-  }).then(tokens => {
-    if (!tokens) return; // Skip if cookies check failed
-    return oktaAuth!.tokenManager.setTokens(tokens.tokens);
-  }).then(() => {
-    return oktaAuth!.getUser();
-  }).then(user => {
-    if (!user) return; // Skip if previous steps failed
+
+    // Call server API to store user
+    try {
+      const serverResponse = await callServerApi('/users', 'POST', {
+        email: user.email,
+        username: user.name || user.email,
+      });
+      // eslint-disable-next-line no-console
+      console.log('Server response:', serverResponse);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to store user in database:', error);
+      // Continue with login even if database operation fails
+    }
+
     authState = {
       isAuthenticated: true,
       user,
       isLoggingIn: false,
       isLoggingOut: false,
     };
-    // Update terminal with success message
-    const terminal = document.getElementById('terminal-output');
-    if (terminal) {
-      const successLine = document.createElement('div');
-      successLine.textContent = `Successfully logged in as ${user.email}`;
-      terminal.appendChild(successLine);
-    }
-    // Call the server API to store user
-    return callServerApi('/users', 'POST', {
-      email: user.email,
-      username: user.name || user.email,
-    });
-  }).then(serverUser => {
-    console.log('User stored in database:', serverUser);
-  }).catch((error: AuthError) => {
-    handleAuthError(error, 'Login');
-  });
 
-  return 'Initiating login process...';
+    return 'Login successful';
+  } catch (error) {
+    const errorMessage = handleAuthError(error as AuthError, 'Login');
+    return errorMessage;
+  } finally {
+    authState.isLoggingIn = false;
+  }
 }
 
 export function logout(): string {

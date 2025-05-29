@@ -28,14 +28,14 @@
     "build:dev": "npm run clean && npm run db:migrate && tsc && npm run copy-src && npm run sass",
     "start:dev": "chmod +x scripts/dev.sh && ./scripts/dev.sh",
     "build:prod": "npm run clean && npm run db:migrate && tsc && npm run copy-src && npm run sass && npm run minify:html",
-    "start:prod": "http-server dist -p 8080 -d false",
+    "start:prod": "npm run start:server & http-server dist -p 8888 -d false",
     "predeploy": "npm run build:prod && mkdir -p release && cp -R dist/* release/",
     "deploy": "gh-pages -d release --dotfiles --message 'Deploy to GitHub Pages [skip ci]' --repo https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
     "lint": "eslint 'src/**/*.{js,ts}'",
     "lint:fix": "eslint 'src/**/*.{js,ts}' --fix",
-    "start:server": "NODE_OPTIONS='--loader ts-node/esm' ts-node src/server/server.ts"
+    "start:server": "NODE_OPTIONS='--loader ts-node/esm' ts-node src/backend/server.ts"
   },
   "devDependencies": {
     "@types/express": "^5.0.2",
