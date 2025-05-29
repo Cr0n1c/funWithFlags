@@ -23,19 +23,25 @@
     "sass": "sass src/sass/:dist/css/ --style compressed",
     "sass:watch": "sass --watch src/sass:dist/css --style expanded",
     "minify:html": "minify src/index.html > dist/index.html",
-    "build:dev": "npm run clean && tsc && npm run copy-src && npm run sass",
+    "db:migrate": "NODE_OPTIONS='--loader ts-node/esm' ts-node src/db/db.ts migrate",
+    "db:rollback": "NODE_OPTIONS='--loader ts-node/esm' ts-node src/db/db.ts rollback",
+    "build:dev": "npm run clean && npm run db:migrate && tsc && npm run copy-src && npm run sass",
     "start:dev": "chmod +x scripts/dev.sh && ./scripts/dev.sh",
-    "build:prod": "npm run clean && tsc && npm run copy-src && npm run sass && npm run minify:html",
-    "start:prod": "http-server dist -p 8080 -d false",
+    "build:prod": "npm run clean && npm run db:migrate && tsc && npm run copy-src && npm run sass && npm run minify:html",
+    "start:prod": "npm run start:server & http-server dist -p 8888 -d false",
     "predeploy": "npm run build:prod && mkdir -p release && cp -R dist/* release/",
     "deploy": "gh-pages -d release --dotfiles --message 'Deploy to GitHub Pages [skip ci]' --repo https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git",
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
     "lint": "eslint 'src/**/*.{js,ts}'",
-    "lint:fix": "eslint 'src/**/*.{js,ts}' --fix"
+    "lint:fix": "eslint 'src/**/*.{js,ts}' --fix",
+    "start:server": "NODE_OPTIONS='--loader ts-node/esm' ts-node src/backend/server.ts"
   },
   "devDependencies": {
-    "@types/node": "^20.11.19",
+    "@types/express": "^5.0.2",
+    "@types/jquery": "^3.5.32",
+    "@types/node": "^20.17.52",
+    "@types/sqlite3": "^3.1.11",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",
@@ -50,12 +56,21 @@
     "nodemon": "^3.1.10",
     "sass": "^1.89.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@okta/okta-auth-js": "^7.12.1"
+    "@okta/okta-auth-js": "^7.12.1",
+    "@types/cors": "^2.8.18",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "jquery": "^3.7.1",
+    "moment": "^2.30.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "type": "module"
 }

@@ -7,8 +7,20 @@ interface OktaAuthClass {
 
 interface OktaAuthInstance {
   token: {
-    parseFromUrl(): Promise<{ tokens: { accessToken: unknown; idToken: unknown } }>;
-    getWithPopup(options: { responseType: string[] }): Promise<{ tokens: { accessToken: unknown; idToken: unknown } }>;
+    parseFromUrl(): Promise<{ 
+      tokens: { 
+        accessToken: unknown; 
+        idToken: unknown 
+      } 
+    }>;
+    getWithPopup(options: { 
+      responseType: string[] 
+    }): Promise<{ 
+      tokens: { 
+        accessToken: unknown; 
+        idToken: unknown 
+      } 
+    }>;
   };
   tokenManager: {
     setTokens(tokens: { accessToken: unknown; idToken: unknown }): Promise<void>;
@@ -100,7 +112,9 @@ export async function getOktaConfig(): Promise<OktaAuthConfig> {
     if (terminal) {
       const errorLine = document.createElement('div');
       errorLine.textContent = `Error initializing Okta: ${
-        error instanceof Error ? error.message : 'Unknown error'
+        error instanceof Error 
+          ? error.message 
+          : 'Unknown error'
       }`;
       errorLine.style.color = 'red';
       terminal.appendChild(errorLine);

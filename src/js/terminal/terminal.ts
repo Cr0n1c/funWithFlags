@@ -127,13 +127,13 @@ export async function showWelcomeMessage(): Promise<void> {
   scrollToBottom();
 }
 
-export function processCommand(inputText: string | null): string {
+export async function processCommand(inputText: string | null): Promise<string> {
   if (!inputText?.trim()) return '';
 
   const command = inputText.toLowerCase().trim();
   const userCommand = `${inputText}\n`;
   let terminal: HTMLElement | null;
-  let response: string;
+  let response = '';
 
   switch (command) {
     case 'help':
@@ -150,7 +150,7 @@ export function processCommand(inputText: string | null): string {
       response = about;
       break;
     case 'login':
-      response = login();
+      response = await login();
       break;
     case 'logout':
       response = logout();
@@ -162,7 +162,6 @@ export function processCommand(inputText: string | null): string {
       response = `Unknown command: ${inputText}`;
   }
 
-  // Add a newline after the response
   return userCommand + response + '\n';
 }
 

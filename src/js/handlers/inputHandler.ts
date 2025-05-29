@@ -21,7 +21,7 @@ async function handleEnterKey(
   if (!inputElement) return;
 
   const inputText = inputElement.innerText.trim();
-  const outputText = processCommand(inputText);
+  const outputText = await processCommand(inputText);
 
   if (outputText) {
     const newOutputLine = document.createElement('div');
@@ -91,6 +91,7 @@ function handleTab(inputElement: HTMLElement): void {
   if (suggestions.length === 1) {
     inputElement.innerText = suggestions[0];
   } else if (suggestions.length > 1) {
+    // eslint-disable-next-line no-console
     console.log(
       'Suggestions:',
       suggestions.join(', '),
@@ -107,6 +108,7 @@ export async function handleInput(event: KeyboardEvent): Promise<void> {
   // Play typing sound for any key that's "printable"
   if (event.key?.length === 1 || event.key === 'Backspace') {
     const soundClone = keySound.cloneNode() as HTMLAudioElement;
+    // eslint-disable-next-line no-console
     soundClone.play().catch(e => console.warn('Keypress sound blocked:', e));
   }
 
