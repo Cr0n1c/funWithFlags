@@ -6,12 +6,43 @@ import sqlite3 from 'sqlite3';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Configure rate limiting
+const defaultLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter limits for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // Limit each IP to 5 requests per hour
+  message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter limits for user management
+const userLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per 15 minutes
+  message: 'Too many user management requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply default rate limiting to all routes
+app.use(defaultLimiter);
 
 app.use(express.json());
 app.use(cors());
@@ -36,15 +67,21 @@ async function initDb() {
   });
 }
 
-// Health check endpoint
-app.get('/api/health', (req: Request, res: Response) => {
+// Health check endpoint - more lenient limit
+app.get('/api/health', rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 30, // 30 requests per 5 minutes
+  message: 'Too many health check requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+}), (req: Request, res: Response) => {
   // eslint-disable-next-line no-console
   console.log('GET /api/health called');
   res.json({ status: 'ok' });
 });
 
-// Example: Create or update user
-app.post('/api/users', asyncHandler(async (req: Request, res: Response) => {
+// User management endpoints - stricter limits
+app.post('/api/users', userLimiter, asyncHandler(async (req: Request, res: Response) => {
   // eslint-disable-next-line no-console
   console.log('POST /api/users called with:', req.body);
   const { email, username } = req.body;
@@ -67,8 +104,14 @@ app.post('/api/users', asyncHandler(async (req: Request, res: Response) => {
   }
 }));
 
-// Example: Log audit event
-app.post('/api/audit', asyncHandler(async (req: Request, res: Response) => {
+// Audit logging - moderate limits
+app.post('/api/audit', rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // 50 requests per 15 minutes
+  message: 'Too many audit log requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+}), asyncHandler(async (req: Request, res: Response) => {
   const { userId, eventType } = req.body;
   if (!userId || !eventType) {
     return res.status(400).json({ error: 'Missing userId or eventType' });
