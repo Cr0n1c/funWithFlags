@@ -100,7 +100,11 @@ app.post('/api/users', userLimiter, asyncHandler(async (req: Request, res: Respo
     const newUser = await db.get('SELECT * FROM users WHERE email = ?', [email]);
     return res.json(newUser);
   } catch (err) {
-    return res.status(500).json({ error: 'Database error', details: err });
+    const errorResponse = { error: 'Database error' };
+    if (process.env.NODE_ENV !== 'production') {
+      errorResponse.details = err;
+    }
+    return res.status(500).json(errorResponse);
   }
 }));
 
