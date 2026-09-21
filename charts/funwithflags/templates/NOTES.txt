@@ -1,0 +1,34 @@
+Fun With Flags {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+UI service : {{ include "funwithflags.uiServiceName" . }}:{{ .Values.ui.service.port }}
+API service: {{ include "funwithflags.apiServiceName" . }}:{{ .Values.api.service.port }}  (proxied by the UI at /api/)
+{{- if .Values.devPostgres.enabled }}
+
+!! devPostgres is ENABLED. This is a single-node, unbacked-up Postgres for local development only.
+{{- end }}
+{{- if not .Values.secrets.existingSecret }}
+
+!! Secrets were rendered from values (secrets.values). For production, create a Secret out of band
+   and set secrets.existingSecret instead.
+{{- end }}
+
+Okta app integration checklist:
+  * Sign-in redirect URI    : {{ .Values.config.okta.redirectUri }}
+  * Sign-out redirect URI   : {{ .Values.config.okta.postLogoutRedirectUri | default "(not configured)" }}
+  * Grant type              : Authorization Code (+ PKCE), confidential client
+  * Scopes                  : {{ .Values.config.okta.scopes }}
+  * Groups claim "{{ .Values.config.okta.groupsClaim }}" must be added to the ID token / userinfo
+  * Admin groups            : {{ .Values.config.adminGroups }}
+
+{{- if .Values.ingress.enabled }}
+
+Ingress:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+
+No ingress. To try it locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "funwithflags.uiServiceName" . }} 8080:{{ .Values.ui.service.port }}
+  open {{ .Values.config.appBaseUrl }}
+{{- end }}

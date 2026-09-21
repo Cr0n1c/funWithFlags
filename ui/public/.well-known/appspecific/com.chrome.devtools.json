@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "SemGrep Security Terminal",
+  "description": "Configuration for Chrome DevTools integration with the SemGrep Security CTF terminal",
+  "settings": {
+    "enableNetworkInspection": true,
+    "enableConsoleInspection": true,
+    "enableSecurityInspection": true
+  }
+} 

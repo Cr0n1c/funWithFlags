@@ -1,0 +1,187 @@
+# Default values for funwithflags.
+# Production-shaped defaults: no bundled database, secrets expected from an existing Secret.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ghcr.io
+  ui:
+    repository: semgrep/funwithflags-ui
+    tag: ""            # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  api:
+    repository: semgrep/funwithflags-api
+    tag: ""
+    pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# ------------------------------------------------------------------ config
+# Non-secret configuration. Rendered into a ConfigMap consumed by the API.
+config:
+  # Public URL players use. Post-login redirects go here and it is the CORS origin.
+  appBaseUrl: "https://ctf.example.com"
+  environment: production
+  logLevel: INFO
+  logJson: true
+  okta:
+    # https://<org>.okta.com/oauth2/default (custom AS) or https://<org>.okta.com (org AS)
+    issuer: "https://your-org.okta.com/oauth2/default"
+    clientId: ""
+    # Must exactly match a Sign-in redirect URI on the Okta app integration.
+    redirectUri: "https://ctf.example.com/api/auth/callback"
+    scopes: "openid profile email groups"
+    groupsClaim: groups
+    usernameClaim: preferred_username
+    postLogoutRedirectUri: ""
+  # Okta groups whose members get the admin API (comma-separated).
+  adminGroups: "ctf-admins"
+  session:
+    cookieName: fwf_session
+    maxAgeSeconds: 28800
+    cookieSecure: true
+    cookieSameSite: lax
+  submitRateLimitPerMinute: 10
+  # Any additional env vars for the API container (name: value).
+  extraEnv: {}
+
+# ----------------------------------------------------------------- secrets
+# Keys expected in the Secret: OKTA_CLIENT_SECRET, SESSION_SECRET, FLAG_HASH_SECRET and
+# either DATABASE_URL or DB_PASSWORD (+ DB_HOST/DB_PORT/DB_NAME/DB_USER below or in the Secret).
+secrets:
+  # Name of a pre-existing Secret (recommended for production: ExternalSecrets, SOPS, etc.).
+  existingSecret: ""
+  # Or let the chart create one from these values (dev/test only - they end up in helm history).
+  values:
+    OKTA_CLIENT_SECRET: ""
+    SESSION_SECRET: ""
+    FLAG_HASH_SECRET: ""
+    DATABASE_URL: ""
+
+# --------------------------------------------------------------- database
+# Connection parts used when DATABASE_URL is not in the Secret. DB_PASSWORD always comes from the Secret.
+database:
+  host: ""
+  port: 5432
+  name: funwithflags
+  user: funwithflags
+
+# Dev-only Postgres StatefulSet (official postgres image). NEVER enable in production;
+# point DATABASE_URL at a managed instance instead.
+devPostgres:
+  enabled: false
+  image:
+    repository: postgres
+    tag: "17-alpine"
+  password: ""          # random on first install if empty; reused on upgrades
+  storage:
+    size: 1Gi
+    storageClassName: ""
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+# -------------------------------------------------------------- migrations
+migrations:
+  # Run `funwithflags-api migrate` in an init container on every API pod before it serves.
+  # Safe with multiple replicas: the migration takes a Postgres advisory lock. Disable if you run
+  # migrations out of band (CI job, manual), in which case pods start without touching the schema.
+  enabled: true
+  # Also upsert challenges from the challenge Secret after migrating (no-op if none configured).
+  seed: true
+
+# -------------------------------------------------------------- challenges
+# Challenge definitions include flags, so they are stored in a Secret, not a ConfigMap.
+challenges:
+  # Name of an existing Secret with a `challenges.yaml` key ...
+  existingSecret: ""
+  # ... or inline content the chart writes into its own Secret.
+  content: ""
+  mountPath: /config
+
+# --------------------------------------------------------------------- ui
+ui:
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  extraEnv: {}
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# -------------------------------------------------------------------- api
+api:
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# ---------------------------------------------------------------- ingress
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: ctf.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: ctf-tls
+  #    hosts: [ctf.example.com]
+
+# ------------------------------------------------------------------- misc
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+  automountServiceAccountToken: false
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+networkPolicy:
+  # Restrict API ingress to the UI pods (plus anything matching extraIngressFrom).
+  enabled: true
+  extraIngressFrom: []
+
+commonLabels: {}
+commonAnnotations: {}

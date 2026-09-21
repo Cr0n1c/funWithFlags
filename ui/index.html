@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Fun With Flags — Semgrep CTF Terminal</title>
+    <meta name="description" content="Retro CRT terminal for the Semgrep Cyber Security Awareness Month CTF.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <link rel="icon" type="image/png" href="/favicon.png"/>
+    <script type="module" src="/src/js/main.ts"></script>
+</head>
+<body>
+
+<input type="checkbox" id="switch" checked>
+<input type="checkbox" id="flicker">
+<input type="checkbox" id="greenTheme">
+
+<div class="switch-wires"></div>
+<div class="switch-mount">
+    <div class="switch-dirt"></div>
+    <div class="power-label" title="Toggle Scanlines/Flicker"></div>
+    <div class="theme-button amber" title="Toggle CRT phosphor color"></div>
+    <div id="switch-wrap" class="surround on">
+        <div class="switch" title="Toggle CRT power">
+            <div class="button"></div>
+            <div class="button-face">
+                <div class="shadow"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="crt">
+    <div class="crt-frame"></div>
+    <div class="crt-glow screen-on"></div>
+</div>
+<div class="crt-effects"></div>
+
+<div class="wrapper container">
+    <audio id="snd_power_on" src="/sounds/power_on.mp3" preload="auto"></audio>
+    <audio id="snd_power_off" src="/sounds/power_off.mp3" preload="auto"></audio>
+    <audio id="snd_keypress" src="/sounds/keypress.mp3" preload="auto"></audio>
+    <div class="terminal-content">
+        <div class="terminal">
+            <div class="scanline"></div>
+            <div class="grain"></div>
+            <div class="terminal-content-inner">
+                <div id="terminal-output"></div>
+                <div id="terminal-input-wrapper">
+                    <span id="input-prefix">$ / > </span>
+                    <div id="terminal-input" contenteditable="true" spellcheck="false"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay">Video 1</div>
+</div>
+
+</body>
+</html>

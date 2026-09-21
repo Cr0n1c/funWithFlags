@@ -1,0 +1,18 @@
+{{- range $component := list "ui" "api" }}
+{{- $cfg := index $.Values $component }}
+{{- if $cfg.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "funwithflags.fullname" $ }}-{{ $component }}
+  labels:
+    {{- include "funwithflags.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  minAvailable: {{ $cfg.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "funwithflags.selectorLabels" (dict "root" $ "component" $component) | nindent 6 }}
+{{- end }}
+{{- end }}

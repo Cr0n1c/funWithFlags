@@ -1,0 +1,15 @@
+apiVersion: v2
+name: funwithflags
+description: Fun With Flags - Semgrep Cyber Security Awareness Month CTF (retro terminal UI + FastAPI middleware)
+type: application
+version: 0.1.0
+appVersion: "2.0.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/semgrep/funWithFlags
+sources:
+  - https://github.com/semgrep/funWithFlags
+maintainers:
+  - name: Semgrep Security Engineering
+keywords:
+  - ctf
+  - security-awareness

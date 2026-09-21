@@ -1,0 +1,58 @@
+# helm upgrade --install fwf charts/funwithflags -f charts/funwithflags/values-local.yaml \
+#   --set config.okta.clientId=... --set secrets.values.OKTA_CLIENT_SECRET=...
+#
+# Local (kind / minikube / Docker Desktop) profile: bundled Postgres, http, images built locally.
+
+image:
+  registry: ""
+  ui:
+    repository: funwithflags-ui
+    tag: dev
+    pullPolicy: IfNotPresent
+  api:
+    repository: funwithflags-api
+    tag: dev
+    pullPolicy: IfNotPresent
+
+config:
+  appBaseUrl: "http://localhost:8080"
+  environment: development
+  logJson: false
+  okta:
+    redirectUri: "http://localhost:8080/api/auth/callback"
+  session:
+    cookieSecure: false
+
+secrets:
+  values:
+    # openssl rand -hex 32
+    SESSION_SECRET: "local-dev-session-secret-please-replace-me-000000"
+    FLAG_HASH_SECRET: "local-dev-flag-hash-secret-please-replace-me-0000"
+    OKTA_CLIENT_SECRET: "replace-me"
+
+devPostgres:
+  enabled: true
+  password: "localdev"
+
+challenges:
+  content: |
+    challenges:
+      - slug: warmup-hello
+        title: Hello, Operator
+        category: warmup
+        points: 50
+        description: |
+          Your first flag is semgrep{semgrep}. Submit it to make sure everything works.
+        flag: "semgrep{semgrep}"
+
+ui:
+  replicaCount: 1
+  pdb:
+    enabled: false
+api:
+  replicaCount: 1
+  pdb:
+    enabled: false
+
+networkPolicy:
+  enabled: false
