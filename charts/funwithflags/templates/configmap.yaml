@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "funwithflags.fullname" . }}
+  labels:
+    {{- include "funwithflags.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  ENVIRONMENT: {{ .Values.config.environment | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  LOG_JSON: {{ .Values.config.logJson | quote }}
+  APP_BASE_URL: {{ required "config.appBaseUrl is required" .Values.config.appBaseUrl | quote }}
+  OKTA_ISSUER: {{ required "config.okta.issuer is required" .Values.config.okta.issuer | quote }}
+  OKTA_CLIENT_ID: {{ required "config.okta.clientId is required" .Values.config.okta.clientId | quote }}
+  OKTA_REDIRECT_URI: {{ required "config.okta.redirectUri is required" .Values.config.okta.redirectUri | quote }}
+  OKTA_SCOPES: {{ .Values.config.okta.scopes | quote }}
+  OKTA_GROUPS_CLAIM: {{ .Values.config.okta.groupsClaim | quote }}
+  OKTA_USERNAME_CLAIM: {{ .Values.config.okta.usernameClaim | quote }}
+  {{- with .Values.config.okta.postLogoutRedirectUri }}
+  OKTA_POST_LOGOUT_REDIRECT_URI: {{ . | quote }}
+  {{- end }}
+  ADMIN_GROUPS: {{ .Values.config.adminGroups | quote }}
+  SESSION_COOKIE_NAME: {{ .Values.config.session.cookieName | quote }}
+  SESSION_MAX_AGE_SECONDS: {{ .Values.config.session.maxAgeSeconds | quote }}
+  SESSION_COOKIE_SECURE: {{ .Values.config.session.cookieSecure | quote }}
+  SESSION_COOKIE_SAMESITE: {{ .Values.config.session.cookieSameSite | quote }}
+  SUBMIT_RATE_LIMIT_PER_MINUTE: {{ .Values.config.submitRateLimitPerMinute | quote }}
+  DB_HOST: {{ include "funwithflags.dbHost" . | quote }}
+  DB_PORT: {{ .Values.database.port | quote }}
+  DB_NAME: {{ .Values.database.name | quote }}
+  DB_USER: {{ .Values.database.user | quote }}
+  {{- if include "funwithflags.hasChallenges" . }}
+  CHALLENGES_FILE: {{ printf "%s/challenges.yaml" .Values.challenges.mountPath | quote }}
+  {{- end }}
+  {{- range $k, $v := .Values.config.extraEnv }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

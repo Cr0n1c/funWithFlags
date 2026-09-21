@@ -1,0 +1,61 @@
+# Local development stack: Postgres + FastAPI middleware + nginx-served UI.
+#
+#   cp .env.example .env   # fill in the Okta values
+#   docker compose up --build
+#   open http://localhost:8080
+#
+# Production runs the same two app images from the Helm chart (charts/funwithflags)
+# against a managed Postgres; the `db` service here is dev-only.
+
+name: funwithflags
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-funwithflags}
+      POSTGRES_USER: ${DB_USER:-funwithflags}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-funwithflags} -d ${DB_NAME:-funwithflags}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
+
+  api:
+    build:
+      context: ./api
+    image: funwithflags-api:dev
+    command: ["migrate-and-serve"]
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      CHALLENGES_FILE: /config/challenges.yaml
+    volumes:
+      # Swap for your real challenge file; it holds flags so keep it out of git.
+      - ${CHALLENGES_FILE:-./api/challenges.example.yaml}:/config/challenges.yaml:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+
+  ui:
+    build:
+      context: ./ui
+    image: funwithflags-ui:dev
+    environment:
+      API_UPSTREAM: api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${UI_HOST_PORT:-8080}:8080"
+
+volumes:
+  pgdata:

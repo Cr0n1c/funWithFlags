@@ -1,0 +1,37 @@
+# Challenge seed file. Load with `funwithflags-api seed challenges.yaml` or set CHALLENGES_FILE.
+#
+# Each entry is upserted by `slug`. Provide either `flag` (plaintext, hashed on import) or
+# `flag_hash` (hex HMAC-SHA256 keyed with FLAG_HASH_SECRET). Because flags are secrets this
+# file should be delivered as a Kubernetes Secret / docker secret, never a ConfigMap.
+challenges:
+  - slug: warmup-hello
+    title: Hello, Operator
+    category: warmup
+    points: 50
+    sort_order: 1
+    description: |
+      Welcome to the terminal. Flags look like semgrep{...}.
+      Your first flag is the lowercase name of the tool that powers Semgrep's scanning.
+      Wrap it as semgrep{<answer>}.
+    flag: "semgrep{semgrep}"
+
+  - slug: warmup-headers
+    title: Read Between the Headers
+    category: warmup
+    points: 100
+    sort_order: 2
+    description: |
+      Somewhere in this site's HTTP response headers there is a hint.
+      Find it and submit the flag.
+    flag: "semgrep{inspect_all_the_headers}"
+
+  - slug: web-idor
+    title: Whose Profile Is It Anyway?
+    category: web
+    points: 250
+    sort_order: 1
+    description: |
+      The demo app at https://ctf-target.example.internal lets you view your own profile.
+      Can you view someone else's?
+    flag: "semgrep{broken_object_level_auth}"
+    case_sensitive: true

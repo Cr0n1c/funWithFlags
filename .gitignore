@@ -139,3 +139,12 @@ release
 .yarn/install-state.gz
 .pnp.*
 
+
+# Fun With Flags: local secrets & challenge flags
+.env
+.env.*
+!.env.example
+challenges.yaml
+charts/*/charts/
+charts/*/Chart.lock
+*.tgz
