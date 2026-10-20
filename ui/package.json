@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@csstools/normalize.css": "^12.1.1",
-    "@lifo-sh/core": "^0.10.17",
+    "@lifo-sh/core": "^0.10.23",
     "jquery": "^4.0.0"
   },
   "devDependencies": {
