@@ -13,7 +13,7 @@ RUN npm run build
 
 # ---------------------------------------------------------------- runtime
 # nginx-unprivileged listens on 8080 and runs as uid 101 out of the box.
-FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 
 # Where nginx should proxy /api/*. docker compose: api:8000, Kubernetes: <release>-api:8000.
 ENV API_UPSTREAM=api:8000 \
