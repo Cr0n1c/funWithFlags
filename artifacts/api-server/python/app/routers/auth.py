@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app import saml
 from app.activity import drain_request, enqueue, shell_username
+from app.config import LOCAL_HOSTS
 from app.models import AuditLog, SamlReplay, SamlTransaction, User
 from app.schemas import HomeRosterEntry, HomeRosterOut, HomeRosterOwner, UserOut
 from app.security import (
@@ -52,8 +53,28 @@ def _redirect(settings, *, popup=False, error=None):
     return response
 
 
+async def _local_dev_login(request: Request, settings, db, *, popup: bool):
+    """Sign in a fixed local account. Reachable only when Settings accepted LOCAL_DEV_LOGIN."""
+    client = request.client.host if request.client else ""
+    if (settings.environment != "development" or client not in LOCAL_HOSTS
+            or settings.saml_idp_sso_url):
+        return _redirect(settings, popup=popup, error="Local sign-in is not available.")
+    user = await _provision(db, settings, "local-dev", {
+        "email": "dev@localhost", "first_name": "Local", "last_name": "Developer",
+        "groups": ["funwithflags-admins"],
+    })
+    db.add(AuditLog(user_id=user.id, event_type="local_dev.login", detail={}))
+    await db.commit()
+    response = _redirect(settings, popup=popup)
+    response.set_cookie(settings.session_cookie_name, encode_session(settings, user),
+                        **cookie_kwargs(settings, max_age=settings.session_max_age_seconds))
+    return response
+
+
 @router.get("/login")
 async def login(request: Request, settings: SettingsDep, db: DbDep, popup: bool = False):
+    if settings.local_dev_login:
+        return await _local_dev_login(request, settings, db, popup=popup)
     relay, browser = random_token(), random_token()
     try:
         client = saml.auth(settings)

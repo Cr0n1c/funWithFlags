@@ -54,6 +54,9 @@ def public_https_origin(value: str, *, production: bool = False) -> bool:
         return False
 
 
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
 def _split_csv(value: object) -> list[str]:
     if value is None:
         return []
@@ -113,6 +116,9 @@ class Settings(BaseSettings):
     saml_admin_subjects: Annotated[list[str], NoDecode] = []
     saml_required_attributes: Annotated[list[str], NoDecode] = []
     saml_transaction_cookie_name: str = "__Secure-fwf_saml_transaction"
+    #: Development-only sign-in without an IdP. Rejected at startup unless the mode is
+    #: development, the origin is localhost, and SAML is not configured.
+    local_dev_login: bool = False
 
     # ----------------------------------------------------------------- sessions
     session_secret: SecretStr = Field(min_length=32)
@@ -164,6 +170,14 @@ class Settings(BaseSettings):
                 raise ValueError("Production APP_BASE_URL must be a public HTTPS origin")
             if not self.session_cookie_secure:
                 raise ValueError("Production session cookies must be Secure")
+        if self.local_dev_login:
+            host = urlsplit(self.app_base_url).hostname
+            if (self.environment != "development" or host not in LOCAL_HOSTS
+                    or self.saml_idp_sso_url or self.saml_idp_entity_id):
+                raise ValueError(
+                    "LOCAL_DEV_LOGIN requires ENVIRONMENT=development, a localhost "
+                    "APP_BASE_URL, and no SAML configuration"
+                )
         return self
 
     @property

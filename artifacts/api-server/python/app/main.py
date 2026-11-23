@@ -60,6 +60,8 @@ def create_app(
             await session.commit()
         if any(initialized):
             log.info("scoreboard.initialized", players=initialized[0], groups=initialized[1])
+        if settings.local_dev_login:
+            log.warning("auth.local_dev_login_enabled")
         log.info("app.started", environment=settings.environment)
         try:
             yield

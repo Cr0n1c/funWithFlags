@@ -24,7 +24,7 @@ createdb funwithflags
 # API (terminal 1)
 cd artifacts/api-server/python
 export ENVIRONMENT=development PORT=8000 LOG_JSON=false
-export APP_BASE_URL=http://localhost:5173 SESSION_COOKIE_SECURE=false
+export APP_BASE_URL=http://localhost:5173 SESSION_COOKIE_SECURE=false LOCAL_DEV_LOGIN=true
 export SESSION_SECRET=$(openssl rand -hex 32) FLAG_HASH_SECRET=$(openssl rand -hex 32)
 export DATABASE_URL=postgresql://localhost/funwithflags
 uv run python -m app.cli migrate
@@ -37,9 +37,14 @@ PORT=5173 BASE_PATH=/ API_PROXY_TARGET=http://localhost:8000 \
 ```
 
 Open http://localhost:5173. Keep `FLAG_HASH_SECRET` stable between runs or stored flag
-hashes stop matching. Sign-in is Okta SAML only and requires an HTTPS origin plus the
-`SAML_*` variables in `artifacts/api-server/python/.env.example`; without them the
-terminal runs signed out and `/api/auth/login` reports that SAML is not configured.
+hashes stop matching.
+
+`LOCAL_DEV_LOGIN=true` makes the sign-in action log in a fixed "Local Developer"
+administrator account without an identity provider. The API refuses to start with it
+unless `ENVIRONMENT=development`, `APP_BASE_URL` is a localhost origin, and no SAML
+issuer or SSO URL is configured; the handler also only answers loopback clients. Never
+set it on a shared or deployed environment. Real sign-in is Okta SAML and requires an
+HTTPS origin plus the `SAML_*` variables in `artifacts/api-server/python/.env.example`.
 
 ## Stack
 
