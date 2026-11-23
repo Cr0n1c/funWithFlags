@@ -106,8 +106,10 @@ async def login(request: Request, settings: SettingsDep, db: DbDep, popup: bool 
 async def metadata(settings: SettingsDep):
     try:
         return Response(saml.metadata(settings), media_type="application/samlmetadata+xml")
-    except saml.SamlError as exc:
-        return Response(str(exc), status_code=503, media_type="text/plain")
+    except saml.SamlError:
+        # A fixed message: never reflect exception text to an unauthenticated caller.
+        return Response("SAML metadata is unavailable.", status_code=503,
+                        media_type="text/plain")
 
 
 async def _provision(db, settings, subject, profile):

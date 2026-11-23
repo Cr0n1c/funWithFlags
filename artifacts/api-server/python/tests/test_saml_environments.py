@@ -265,10 +265,7 @@ async def _assert_http_configuration_failure(settings: Settings):
 
         metadata = await client.get("/api/auth/saml/metadata")
         assert metadata.status_code == 503
-        assert metadata.text in {
-            "Okta SAML is not configured. Contact the administrator.",
-            "Okta SAML configuration is invalid.",
-        }
+        assert metadata.text == "SAML metadata is unavailable."
         async with db.session_factory() as session:
             assert not (await session.execute(select(User))).scalars().all()
             assert not (await session.execute(select(SamlTransaction))).scalars().all()

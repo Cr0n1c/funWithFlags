@@ -157,7 +157,9 @@ def _fetch_transport(url, host, port):
         sock.settimeout(5)
         sock.connect(address)
         if url.scheme == "https":
-            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=host)
+            context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            sock = context.wrap_socket(sock, server_hostname=host)
         conn = http.client.HTTPConnection(host, port, timeout=5)
         conn.sock = sock
         path = (url.path or "/") + ("?" + url.query if url.query else "")

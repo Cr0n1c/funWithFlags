@@ -51,11 +51,27 @@ export function mockupPreviewPlugin(): Plugin {
     }));
   }
 
+  // JSON.stringify alone leaves characters that can end a script or a line when the
+  // string is embedded in generated source.
+  const UNSAFE_SOURCE_CHARS: Record<string, string> = {
+    "<": "\\u003C",
+    ">": "\\u003E",
+    "\u2028": "\\u2028",
+    "\u2029": "\\u2029",
+  };
+
+  function toSourceString(value: string): string {
+    return JSON.stringify(value).replace(
+      /[<>\u2028\u2029]/g,
+      (char) => UNSAFE_SOURCE_CHARS[char] ?? char,
+    );
+  }
+
   function generateSource(components: Array<DiscoveredComponent>): string {
     const entries = components
       .map(
         (c) =>
-          `  ${JSON.stringify(c.globKey)}: () => import(${JSON.stringify(c.importPath)})`,
+          `  ${toSourceString(c.globKey)}: () => import(${toSourceString(c.importPath)})`,
       )
       .join(",\n");
 
