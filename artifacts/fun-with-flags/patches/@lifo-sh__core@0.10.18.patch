@@ -1,0 +1,191 @@
+diff --git a/dist/index-DjPOCNff.js b/dist/index-DjPOCNff.js
+index 0b69791a25246acff94520e79b53d6b5085fac0f..ef1ef50e3a149bda34389c009602a45ecbbfe293 100644
+--- a/dist/index-DjPOCNff.js
++++ b/dist/index-DjPOCNff.js
+@@ -4315,12 +4315,13 @@
+         const i = s.kind === j.RedirectDup, o = this.advance().value;
+         if (i) {
+-          n.push({ operator: o, target: [] });
++          n.push({ operator: o, target: [], beforeCommand: t.length === 0 });
+           continue;
+         }
+         const a = this.expect(j.Word);
+         n.push({
+           operator: o,
++          beforeCommand: t.length === 0,
+           target: a.parts ?? [{ text: a.value, quoted: "none" }]
+         });
+         continue;
+       }
+@@ -4474,6 +4475,12 @@ function is(r) {
+ async function os(r, e) {
+   const t = [];
+   for (const n of r) {
++    if (n.length === 1 && n[0].quoted === "double" && n[0].text === "$@") {
++      const s = Number.parseInt(e.env["#"] ?? "0", 10);
++      for (let i = 1; i <= s; i++)
++        t.push(e.env[String(i)] ?? "");
++      continue;
++    }
+     const s = await fi(n, e);
+     if (wl(n)) {
+       const i = fl(s, e.cwd, e.vfs);
+@@ -5109,7 +5116,11 @@ class Sl {
+     return o[o.length - 1];
+   }
+   async executeCommand(e, t, n, s, i, o) {
+-    const a = n ?? (o == null ? void 0 : o.stdout);
++    const a = {
++      ...o,
++      stdout: n ?? (o == null ? void 0 : o.stdout),
++      stderr: i ?? (o == null ? void 0 : o.stderr)
++    };
+     switch (e.type) {
+       case "simple_command":
+         return this.executeSimpleCommand(e, t, n, s, i, o);
+@@ -5220,7 +5231,7 @@ class Sl {
+   async executeCompoundList(e, t) {
+     let n = 0;
+     for (const s of e)
+-      n = await this.executeList(s);
++      n = await this.executeList(s, void 0, t);
+     return n;
+   }
+   async executeSimpleCommand(e, t, n, s, i, o) {
+@@ -5239,7 +5250,35 @@ class Sl {
+     if (g) {
+       const A = g.get(f);
+-      if (A !== void 0) {
++      if (A !== void 0 && !(o?.aliasExpansionStack ?? []).includes(f)) {
+-        const T = A + (p.length > 0 ? " " + p.join(" ") : "");
+-        return this.executeLine(T);
++        // Expanded arguments are data, not shell source. Keep each one intact.
++        const T = A + (p.length > 0 ? " " + p.map((arg) => "'" + arg.replace(/'/g, "'\\''") + "'").join(" ") : "");
++        const script = ns(ts(T));
++        const first = script.lists[0]?.entries[0]?.pipeline.commands[0];
++        const last = script.lists.at(-1)?.entries.at(-1)?.pipeline.commands.at(-1);
++        // Preserve lexical order on both sides of the alias command word.
++        // Keep the original AST: values and targets must expand only at dispatch.
++        if (e.assignments.length) {
++          if (first?.type !== "simple_command")
++            throw new Error("Alias prefix assignments require a simple command");
++          first.assignments.unshift(...e.assignments);
++        }
++        const prefix = e.redirections.filter((r) => r.beforeCommand);
++        const trailing = e.redirections.filter((r) => !r.beforeCommand);
++        if (prefix.length) {
++          if (first?.type !== "simple_command")
++            throw new Error("Alias redirections require a simple command");
++          first.redirections.unshift(...prefix);
++        }
++        if (trailing.length) {
++          if (last?.type !== "simple_command")
++            throw new Error("Alias redirections require a simple command");
++          last.redirections.push(...trailing);
++        }
++        return this.executeScript(script, t ?? s, {
++          ...o,
++          aliasExpansionStack: [...(o?.aliasExpansionStack ?? []), f],
++          stdout: n ?? (o == null ? void 0 : o.stdout),
++          stderr: i ?? (o == null ? void 0 : o.stderr)
++        });
+       }
+     }
+@@ -5246,7 +5285,10 @@ class Sl {
+     const m = {};
++    let S;
++    try {
+     for (const A of e.assignments) {
+       const T = await Ct(A.value, a);
+-      m[A.name] = this.config.env[A.name], this.config.env[A.name] = T;
++      if (!Object.prototype.hasOwnProperty.call(m, A.name)) m[A.name] = this.config.env[A.name];
++      this.config.env[A.name] = T;
+     }
+     let v = n ?? (o == null ? void 0 : o.stdout) ?? this.config.defaultStdout ?? {
+       write: (A) => this.config.writeToTerminal(A)
+@@ -5288,7 +5330,5 @@ class Sl {
+     }
+     !E && s && (E = s), u != null && u.runAs && b.write(u.message + `
+ `);
+-    let S;
+-    try {
+       if (f === "break") {
+         const T = p[0] ? parseInt(p[0], 10) : 1;
+@@ -5304,7 +5344,7 @@ class Sl {
+       }
+       const A = this.functions.get(f);
+       if (A)
+-        S = await this.executeFunction(A, p);
++        S = await this.executeFunction(A, p, E, v, s, b, o);
+       else {
+         const T = this.config.builtins.get(f);
+         if (T)
+@@ -5377,28 +5417,28 @@ class Sl {
+     }
+     return this.lastExitCode = S, S;
+   }
+-  async executeFunction(e, t) {
+-    const n = {}, s = ["@", "#"];
+-    for (let o = 0; o <= 9; o++) s.push(String(o));
+-    for (let o = 10; o < t.length + 10; o++) s.push(String(o));
+-    for (const o of s)
+-      n[o] = this.config.env[o];
++  async executeFunction(e, t, n, s, i, o, a) {
++    const c = {}, l = ["@", "#"];
++    for (let u = 0; u <= 9; u++) l.push(String(u));
++    for (let u = 10; u < t.length + 10; u++) l.push(String(u));
++    for (const u of l)
++      c[u] = this.config.env[u];
+     this.config.env["#"] = String(t.length), this.config.env["@"] = t.join(" ");
+-    for (let o = 0; o < t.length; o++)
+-      this.config.env[String(o + 1)] = t[o];
+-    let i;
++    for (let u = 0; u < t.length; u++)
++      this.config.env[String(u + 1)] = t[u];
++    let d;
+     try {
+-      i = await this.executeCommand(e);
+-    } catch (o) {
+-      if (o instanceof jr)
+-        i = o.exitCode;
++      d = await this.executeCommand(e, n, s, i, o, a);
++    } catch (u) {
++      if (u instanceof jr)
++        d = u.exitCode;
+       else
+-        throw o;
++        throw u;
+     } finally {
+-      for (const [o, a] of Object.entries(n))
+-        a === void 0 ? delete this.config.env[o] : this.config.env[o] = a;
++      for (const [u, f] of Object.entries(c))
++        f === void 0 ? delete this.config.env[u] : this.config.env[u] = f;
+     }
+-    return this.lastExitCode = i, i;
++    return this.lastExitCode = d, d;
+   }
+   async executeCapture(e, t) {
+     return (await this.executeCaptureResult(e, t)).stdout;
+diff --git a/dist/printf-Cc2o7KZx.js b/dist/printf-Cc2o7KZx.js
+--- a/dist/printf-Cc2o7KZx.js
++++ b/dist/printf-Cc2o7KZx.js
+@@ -56,13 +56,17 @@ function i(e, t) {
+       r++;
+     } else
+       s += e[r], r++;
+-  return s;
++  return { output: s, consumed: n };
+ }
+ const c = async (e) => {
+   if (e.args.length === 0)
+     return e.stderr.write(`printf: missing format string
+ `), 1;
+-  const t = e.args[0], s = e.args.slice(1), n = i(t, s);
++  const t = e.args[0], s = e.args.slice(1);
++  let n = "", r = 0, a;
++  do
++    a = i(t, s.slice(r)), n += a.output, r += a.consumed;
++  while (a.consumed > 0 && r < s.length);
+   return e.stdout.write(n), 0;
+ };
+ export {

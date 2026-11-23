@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- { "flag": "so_you_found_a_way_to_s33_m3!" } -->
+    <meta charset="utf-8">
+    <title>Fun With Flags — xSecurity CTF Terminal</title>
+    <meta name="description" content="Retro CRT terminal for the xSecurity Cyber Security Awareness Month CTF.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <link rel="icon" type="image/png" href="/favicon.png"/>
+    <script type="module" src="/src/js/main.ts"></script>
+</head>
+<body>
+
+<input type="checkbox" id="switch" checked>
+<input type="checkbox" id="flicker">
+<input type="checkbox" id="greenTheme">
+
+<svg class="degauss-filter-defs" aria-hidden="true" focusable="false">
+    <defs>
+        <filter id="degauss-distortion" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.006 0.018" numOctaves="2" seed="7" result="degauss-noise">
+                <animate attributeName="baseFrequency" values="0.006 0.018;0.011 0.027;0.004 0.014;0.006 0.018" dur="2.6s" begin="indefinite" fill="freeze"/>
+            </feTurbulence>
+            <feDisplacementMap in="SourceGraphic" in2="degauss-noise" scale="0" xChannelSelector="R" yChannelSelector="B">
+                <animate attributeName="scale" values="0;82;-54;36;-20;9;0" keyTimes="0;0.07;0.17;0.3;0.46;0.65;1" dur="2.6s" begin="indefinite" fill="freeze"/>
+            </feDisplacementMap>
+        </filter>
+    </defs>
+</svg>
+
+<div class="switch-wires"></div>
+<div class="switch-mount">
+    <div class="switch-dirt"></div>
+    <div class="power-label" title="Toggle Scanlines/Flicker"></div>
+    <div class="theme-button amber" title="Toggle CRT phosphor color"></div>
+    <div id="switch-wrap" class="surround on">
+        <div class="switch" title="Toggle CRT power">
+            <div class="button"></div>
+            <div class="button-face">
+                <div class="shadow"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="degauss-wires" aria-hidden="true"></div>
+<div class="degauss-mount">
+    <div class="degauss-mount-dirt" aria-hidden="true"></div>
+    <span class="degauss-label" aria-hidden="true">DEGAUSS</span>
+    <button id="degauss-button" class="degauss-button" type="button" aria-label="Degauss" aria-describedby="degauss-status" aria-disabled="false" aria-busy="false" title="Degauss CRT screen">
+        <span class="degauss-button-cap" aria-hidden="true"></span>
+    </button>
+    <span id="degauss-status" class="degauss-status" role="status" aria-live="polite">Degauss ready</span>
+</div>
+
+<div class="crt">
+    <div class="crt-frame"></div>
+    <div class="crt-glow screen-on"></div>
+</div>
+<div class="crt-effects"></div>
+
+<div class="wrapper container">
+    <audio id="snd_power_on" src="/sounds/power_on.mp3" preload="auto"></audio>
+    <audio id="snd_power_off" src="/sounds/power_off.mp3" preload="auto"></audio>
+    <audio id="snd_keypress" src="/sounds/keypress.mp3" preload="auto"></audio>
+    <audio id="snd_degauss" src="/sounds/degauss.mp3" preload="auto"></audio>
+    <div class="terminal-content">
+        <!-- Everything is fair game: a simulated browser-assistant handshake.
+             In this page's JavaScript console:
+             window.dispatchEvent(new Event('ctf:claude-source-clue'))
+             Sign in and finish booting first, or the terminal will queue the reply.
+             This puzzle does not detect or block real browser extensions. -->
+        <div class="terminal">
+            <div class="scanline"></div>
+            <div class="grain"></div>
+            <div class="terminal-content-inner">
+                <div id="terminal-output"></div>
+                <div id="terminal-input-wrapper" hidden>
+                    <span id="input-prefix">$ / > </span>
+                    <div id="terminal-input" contenteditable="false" spellcheck="false"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay">Video 1</div>
+</div>
+
+</body>
+</html>

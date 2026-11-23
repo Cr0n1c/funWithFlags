@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: /ui
+    directory: /artifacts/fun-with-flags
     schedule:
       interval: weekly
     cooldown:
@@ -10,15 +10,15 @@ updates:
       ui-dev:
         dependency-type: development
   - package-ecosystem: uv
-    directory: /api
+    directory: /artifacts/api-server/python
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
   - package-ecosystem: docker
     directories:
-      - /ui
-      - /api
+      - /artifacts/fun-with-flags
+      - /artifacts/api-server/python
     schedule:
       interval: weekly
     cooldown:

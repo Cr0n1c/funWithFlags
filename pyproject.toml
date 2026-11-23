@@ -1,0 +1,25 @@
+[project]
+name = "fun-with-flags-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "aiosqlite>=0.21",
+    "alembic>=1.16",
+    "asyncpg>=0.30",
+    "bcrypt>=4.2",
+    "certifi>=2026.10.18",
+    "fastapi>=0.118",
+    "httpx>=0.28",
+    "pydantic>=2.11",
+    "pydantic-settings>=2.10",
+    "pyjwt[crypto]>=2.15.1",
+    "pytest>=8.4",
+    "pytest-asyncio>=1.1",
+    "python-multipart>=0.0.32",
+    "python3-saml==1.16.0",
+    "pyyaml>=6.0.2",
+    "sqlalchemy[asyncio]>=2.0.43",
+    "structlog>=25.4",
+    "uvicorn[standard]>=0.37",
+]
