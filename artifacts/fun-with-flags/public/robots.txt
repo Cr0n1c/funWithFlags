@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /backup/
+Disallow: /private/
+Disallow: /staging/
+
+# flag: @lw@y$_ch3ck_d4_rob0ts

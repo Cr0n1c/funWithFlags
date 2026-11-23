@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "xSecurity Security Terminal",
+  "description": "Configuration for Chrome DevTools integration with the xSecurity Security CTF terminal",
+  "settings": {
+    "enableNetworkInspection": true,
+    "enableConsoleInspection": true,
+    "enableSecurityInspection": true
+  }
+} 

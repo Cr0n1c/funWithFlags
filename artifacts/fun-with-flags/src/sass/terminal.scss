@@ -1,0 +1,576 @@
+@use 'index' as *;
+
+.matrix-screen {
+  position: fixed;
+  inset: 0;
+  // Above terminal text (3), below the monitor bezel and controls (9000+).
+  z-index: 4;
+  overflow: hidden;
+  background: #000;
+  canvas { display: block; width: 100%; height: 100%; }
+  button {
+    position: absolute;
+    bottom: max(5vh, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: .5rem .8rem;
+    border: 1px solid var(--primary-color-dark);
+    background: #000;
+    color: var(--primary-color);
+    font: 1rem monospace;
+    cursor: pointer;
+    &:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 3px; }
+  }
+}
+
+.sl-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  pre {
+    margin: 0;
+    flex: 0 0 auto;
+    font: inherit;
+    white-space: pre;
+  }
+}
+
+.challenge-dialog {
+  box-sizing: border-box;
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: min(80vh, 44rem);
+  overflow: auto;
+  scroll-padding: 6px;
+  padding: 1.5rem;
+  border: 2px solid var(--primary-color);
+  background: #101810;
+  color: var(--primary-color, #8de49a);
+  font: 1.15rem/1.45 'VT220', monospace;
+  box-shadow: 0 0 1.5rem var(--primary-color);
+  overflow-wrap: anywhere;
+
+  &::backdrop {
+    background: rgba(0, 0, 0, .82);
+  }
+
+  button:focus-visible, .challenge-dialog__form input:focus-visible,
+  .challenge-dialog__description:focus-visible, .challenge-dialog__feedback:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  h2 {
+    margin: 0 5rem 1rem 0;
+    font: inherit;
+    font-size: 1.5rem;
+  }
+
+  .challenge-dialog__close {
+    float: right;
+    padding: .25rem .6rem;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .challenge-dialog__description {
+    white-space: pre-wrap;
+  }
+
+  .challenge-dialog__form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+    margin-top: 1.5rem;
+
+    label {
+      flex-basis: 100%;
+    }
+
+    input {
+      box-sizing: border-box;
+      flex: 1 1 12rem;
+      min-width: 0;
+      padding: .35rem .5rem;
+      border: 1px solid currentColor;
+      border-radius: 0;
+      background: #101810;
+      color: inherit;
+      font: inherit;
+    }
+
+    button {
+      padding: .35rem .8rem;
+      border: 1px solid currentColor;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: wait;
+    }
+  }
+
+  .challenge-dialog__feedback {
+    flex-basis: 100%;
+    min-height: 1.4em;
+    margin: 0;
+  }
+}
+
+.terminal-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal {
+  padding: 1em;
+  // Pager measurements must not depend on the height of the page they render.
+  // Keep the same viewport-based budget below the desktop breakpoint too.
+  height: 90vh;
+  border-radius: 5px;
+  animation: txt-shadow 1.6s infinite;
+  font-size: calc(10px + (16 - 10) * ((100vw - 300px) / (1600 - 300)));
+  // The CRT itself scrolls; hiding overflow here clips ordinary command output.
+  overflow: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  #terminal-output {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+    font-family: 'VT220', 'Courier New', monospace;
+    font-weight: 700;
+    font-size: 20px;
+    color: inherit;
+    // Grow with command history while filling an otherwise empty CRT.
+    flex: 1 0 auto;
+    margin-bottom: 0.5em;
+    white-space: pre;
+    overflow: visible;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+
+  #terminal-output a,
+  #terminal-output .challenge-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+
+  #terminal-output .challenge-link {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .terminal-pager {
+    width: 100%;
+  }
+
+  .terminal-pager__viewport {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+
+    &:focus-visible {
+      outline: 2px solid var(--primary-color);
+      // Inset so the CRT's clipping cannot hide the keyboard focus indicator.
+      outline-offset: -2px;
+    }
+  }
+
+  .terminal-pager__content {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    width: 100%;
+    will-change: transform;
+  }
+
+  // VT220 lacks punctuation such as em dashes; its fallback glyphs are wider
+  // than its 10px cells. Use one complete monospace face for table text/links.
+  // Ordinary output retains the CRT face, and wide tables still scroll.
+  .terminal-table-output,
+  .terminal-table-output a,
+  .terminal-table-output .challenge-link {
+    font-family: 'Courier New', monospace;
+    font-variant-ligatures: none;
+    white-space: pre;
+    overflow-wrap: normal;
+    letter-spacing: 0;
+  }
+
+  .terminal-pager__status {
+    background: var(--primary-color);
+    color: var(--background-color, #121010);
+    display: inline-block;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .terminal-pager--finished .terminal-pager__content {
+    will-change: auto;
+  }
+
+  #terminal-input-wrapper[hidden] {
+    display: none;
+  }
+
+  #terminal-input-wrapper {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 100%;
+    height: 1.2em;
+  }
+
+  .terminal-content-inner {
+    position: relative;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+
+    // The visual keyboard can shrink the editor below the usual CRT height.
+    // Do not let the shell's full-height minimum override its measured height.
+    &:has(> .vi-screen) {
+      min-height: 0;
+    }
+  }
+
+  .vi-screen {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) 1em 1em auto;
+    overflow: hidden;
+    outline: none;
+    background: transparent;
+    font-family: 'VT220';
+    font-weight: 700;
+    font-size: 20px;
+    line-height: 1;
+    white-space: pre;
+  }
+
+  .vi-buffer {
+    overflow: hidden;
+  }
+
+  .vi-input {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    padding: 0;
+    border: 0;
+    font-size: 16px;
+  }
+
+  #terminal-output:has(.idle-matrix-message) {
+    flex: 0 0 auto;
+    min-width: 0;
+    width: calc(100% - 180px);
+    // Keep a readable, keyboard-scrollable message alongside the exit controls.
+    // The outer CRT can still scroll when enlarged controls need more room.
+    max-height: max(4em, 45vh);
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 1.4286rem;
+    line-height: 1.3;
+    scrollbar-width: thin;
+    scroll-margin: 8px;
+
+    &:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 3px;
+    }
+  }
+
+  .idle-matrix-controls {
+    display: flex;
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+    gap: 8px;
+    padding: 8px 5px;
+    // Leave room for the fixed degauss control when the CRT scrolls down.
+    padding-right: 148px;
+
+    button {
+      max-width: 100%;
+      min-width: 88px;
+      min-height: 44px;
+      padding: 8px 16px;
+      color: inherit;
+      background: var(--background-color, #121010);
+      border: 1px solid currentColor;
+      border-radius: 3px;
+      font: inherit;
+      font-size: 1.2857rem;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      scroll-margin: 8px;
+      touch-action: manipulation;
+      cursor: pointer;
+
+      &:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 3px;
+      }
+
+      &:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+    }
+
+    @media (max-width: 767px) {
+      padding-right: 106px;
+    }
+  }
+
+  .vi-controls {
+    display: flex;
+    gap: 8px;
+    padding-top: 4px;
+
+    button {
+      min-height: 36px;
+      flex: 1;
+      color: inherit;
+      background: transparent;
+      border: 1px solid currentColor;
+      font: inherit;
+    }
+  }
+
+  .vi-row {
+    height: 1em;
+  }
+
+  .vi-empty {
+    opacity: 0.75;
+  }
+
+  .vi-cursor {
+    color: var(--background-color, #121010);
+    background: var(--primary-color);
+  }
+
+  .vi-status {
+    color: var(--background-color, #121010);
+    background: var(--primary-color);
+    overflow: hidden;
+  }
+
+  .vi-command {
+    overflow: hidden;
+  }
+
+  &::before {
+    content: "";
+    width: 100%;
+    height: 100%;
+    opacity: 0.3;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  @media (min-width: 768px) {
+    width: 95vw;
+  }
+}
+
+// Keep desktop table cells and instructions above both fixed hardware and the
+// internal scanline. Restore the hardware as soon as the pager finishes.
+@media (hover: hover) {
+  body:has(.terminal-pager:not(.terminal-pager--finished)) {
+    .switch-mount, .degauss-mount {
+      visibility: hidden;
+    }
+  }
+
+  .wrapper:has(.terminal-pager:not(.terminal-pager--finished)) {
+    z-index: 11200;
+  }
+
+  #switch:checked ~ .wrapper:has(.terminal-pager:not(.terminal-pager--finished)) > .terminal-content {
+    animation: none;
+    overflow: visible;
+  }
+
+  .terminal-pager:not(.terminal-pager--finished) {
+    position: relative;
+    z-index: 10001;
+  }
+}
+
+// A short desktop layout is also what page zoom produces. Use the available
+// screen rather than putting quit instructions beneath the CRT padding.
+// Phone rotation has separate scope.
+@media (hover: hover) and (max-height: 600px) {
+  .terminal-pager:not(.terminal-pager--finished) {
+    position: fixed;
+    inset: 8px;
+    width: auto;
+    background: var(--background-color, #121010);
+  }
+
+  .terminal {
+    // Keep the restored prompt inside the screen, including the CRT padding.
+    height: calc(100dvh - 40px);
+
+    #terminal-input-wrapper {
+      height: auto;
+      min-height: 1.2em;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    #terminal-input {
+      min-width: 0;
+      flex: 1 1 8ch;
+    }
+
+    #input-prefix {
+      overflow-wrap: anywhere;
+      max-width: 100%;
+    }
+  }
+}
+
+// At desktop zoom the fixed CRT hardware can occupy most of the viewport.
+// Keep only the active encounter above it, with independently scrolling text
+// and a stationary action area. Dismissing restores the ordinary CRT layout.
+@media (max-width: 767px), (max-height: 600px) {
+  body:has(.idle-matrix-message) {
+    .switch-mount, .degauss-mount {
+      // Do not leave a keyboard stop behind the opaque encounter panel.
+      visibility: hidden;
+    }
+  }
+
+  .wrapper:has(.idle-matrix-message) {
+    position: relative;
+    z-index: 11200;
+  }
+
+  #switch:checked ~ .wrapper:has(.idle-matrix-message) > .terminal-content {
+    // Even the power-on animation's final identity transform captures fixed
+    // descendants. The encounter must be sized to the viewport, not the CRT.
+    animation: none;
+    overflow: visible;
+  }
+
+  .terminal:has(.idle-matrix-message) {
+    animation: none;
+  }
+
+  .terminal .terminal-content-inner:has(.idle-matrix-message) {
+    position: fixed;
+    inset: 0;
+    min-height: 0;
+    padding: 8px;
+    background: var(--background-color, #121010);
+
+    #terminal-output {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+      margin-bottom: 8px;
+    }
+
+    .idle-matrix-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px;
+      padding: 0;
+
+      button {
+        min-width: 0;
+        padding: 2px 4px;
+        line-height: 1.15;
+      }
+
+      [data-action="wake"], [data-action="cancel"], [data-action="dismiss"] {
+        grid-column: 1 / -1;
+      }
+    }
+  }
+}
+
+.terminal-content {
+  position: relative;
+  z-index: 3;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+
+.grain {
+  animation: grain 8s steps(10) infinite;
+  background-image: url(../images/noise.png);
+  height: 300%;
+  left: -30%;
+  opacity: 0.3;
+  position: absolute;
+  top: -110%;
+  width: 200%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+#terminal-input {
+  outline: none;
+  cursor: none;
+  font-family: 'VT220', 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 20px;
+  color: inherit;
+  background-color: transparent;
+  border: none;
+  word-break: break-all;
+  white-space: pre-wrap;
+  caret-color: transparent;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+#input-prefix {
+  font-family: 'VT220', 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 20px;
+  color: inherit;
+  line-height: 1;
+  letter-spacing: 0;
+  margin-right: 0.5em;
+} 
