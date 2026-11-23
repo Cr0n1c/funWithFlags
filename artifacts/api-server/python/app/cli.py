@@ -105,12 +105,15 @@ def _provision_crack_hashes() -> None:
 
 def _serve() -> None:
     settings = get_settings()
+    # The local sign-in authorizes by peer address: listen on loopback only and never
+    # let a request header replace that address.
+    local = settings.local_dev_login
     uvicorn.run(
         "app.asgi:app",
-        host=settings.host,
+        host="127.0.0.1" if local else settings.host,
         port=settings.port,
-        proxy_headers=True,
-        forwarded_allow_ips=settings.forwarded_allow_ips,
+        proxy_headers=not local,
+        forwarded_allow_ips=None if local else settings.forwarded_allow_ips,
         log_config=None,
         access_log=False,
     )

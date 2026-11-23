@@ -29,6 +29,7 @@ from app.shell_names import acquire_shell_name_lock, ensure_shell_names
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 ACS_PATH = "/api/auth/saml/acs"
+FORWARDING_HEADERS = ("forwarded", "x-forwarded-for", "x-forwarded-host", "x-real-ip")
 
 
 def _account_id(user: User) -> str:
@@ -56,8 +57,11 @@ def _redirect(settings, *, popup=False, error=None):
 async def _local_dev_login(request: Request, settings, db, *, popup: bool):
     """Sign in a fixed local account. Reachable only when Settings accepted LOCAL_DEV_LOGIN."""
     client = request.client.host if request.client else ""
-    if (settings.environment != "development" or client not in LOCAL_HOSTS
-            or settings.saml_idp_sso_url):
+    # A forwarding header means the peer address may be caller-supplied, and a foreign
+    # Host means a rebinding page is addressing this loopback listener.
+    forwarded = any(name in request.headers for name in FORWARDING_HEADERS)
+    if (settings.environment != "development" or client not in LOCAL_HOSTS or forwarded
+            or request.url.hostname not in LOCAL_HOSTS or settings.saml_idp_sso_url):
         return _redirect(settings, popup=popup, error="Local sign-in is not available.")
     user = await _provision(db, settings, "local-dev", {
         "email": "dev@localhost", "first_name": "Local", "last_name": "Developer",

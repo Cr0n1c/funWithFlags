@@ -28,12 +28,14 @@ def main():
     configure_environment()
     settings = get_settings()
     configure_logging(settings)
+    local = settings.local_dev_login
     uvicorn.run(
         "app.asgi:app",
-        host="0.0.0.0",  # noqa: S104 - managed service must accept proxy connections
+        # Loopback only, without header-supplied peers, when local sign-in is enabled.
+        host="127.0.0.1" if local else "0.0.0.0",  # noqa: S104 - accepts proxy connections
         port=int(os.environ["PORT"]),
-        proxy_headers=True,
-        forwarded_allow_ips="*",
+        proxy_headers=not local,
+        forwarded_allow_ips=None if local else "*",
         access_log=False,
         log_config=None,
     )

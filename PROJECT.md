@@ -42,7 +42,9 @@ hashes stop matching.
 `LOCAL_DEV_LOGIN=true` makes the sign-in action log in a fixed "Local Developer"
 administrator account without an identity provider. The API refuses to start with it
 unless `ENVIRONMENT=development`, `APP_BASE_URL` is a localhost origin, and no SAML
-issuer or SSO URL is configured; the handler also only answers loopback clients. Never
+issuer or SSO URL is configured. With the flag on, the API listens on 127.0.0.1 only and
+ignores forwarded-address headers; the handler rejects requests that carry them or use a
+non-localhost Host, and the dev server listens on loopback whenever it proxies. Never
 set it on a shared or deployed environment. Real sign-in is Okta SAML and requires an
 HTTPS origin plus the `SAML_*` variables in `artifacts/api-server/python/.env.example`.
 

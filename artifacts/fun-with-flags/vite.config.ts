@@ -23,6 +23,8 @@ if (!basePath) {
 }
 
 // Local development only: forward API calls to a separately running API server.
+// The API may trust loopback peers for local sign-in, so a proxying dev server must
+// not relay requests from other machines: listen on loopback and keep host checks on.
 const apiProxyTarget = process.env.API_PROXY_TARGET;
 
 export default defineConfig({
@@ -30,8 +32,8 @@ export default defineConfig({
   server: {
     port,
     strictPort: true,
-    host: '0.0.0.0',
-    allowedHosts: true,
+    host: apiProxyTarget ? '127.0.0.1' : '0.0.0.0',
+    allowedHosts: apiProxyTarget ? undefined : true,
     proxy: apiProxyTarget ? { '/api': { target: apiProxyTarget, changeOrigin: false } } : undefined,
     fs: {
       strict: true,

@@ -13,6 +13,9 @@ BASE = {
 }
 
 
+LOCAL = {"Host": "localhost:5173"}
+
+
 def configure(monkeypatch, **overrides):
     for key in ("NODE_ENV", "SAML_IDP_SSO_URL", "SAML_IDP_ENTITY_ID"):
         monkeypatch.delenv(key, raising=False)
@@ -52,7 +55,7 @@ async def test_disabled_by_default(client, settings):
 async def test_signs_in_a_local_account(client, settings):
     settings.environment = "development"
     settings.local_dev_login = True
-    response = await client.get("/api/auth/login")
+    response = await client.get("/api/auth/login", headers=LOCAL)
     assert response.headers["location"].endswith("?auth=ok")
     token = response.cookies[settings.session_cookie_name]
     me = await client.get("/api/auth/me", headers={
@@ -74,6 +77,43 @@ async def test_handler_refuses_outside_local_development(client, settings, monke
     else:
         from app.routers import auth
         monkeypatch.setattr(auth, "LOCAL_HOSTS", frozenset())
-    response = await client.get("/api/auth/login")
+    response = await client.get("/api/auth/login", headers=LOCAL)
     assert "auth_error=" in response.headers["location"]
     assert settings.session_cookie_name not in response.cookies
+
+
+@pytest.mark.parametrize("headers", [
+    {"Host": "rebind.attacker.test"},
+    {"Host": "localhost.attacker.test:8000"},
+    {},  # The fixture's own non-local host.
+    {**LOCAL, "X-Forwarded-For": "127.0.0.1"},
+    {**LOCAL, "Forwarded": "for=127.0.0.1"},
+    {**LOCAL, "X-Real-IP": "127.0.0.1"},
+    {**LOCAL, "X-Forwarded-Host": "localhost"},
+])
+async def test_handler_refuses_foreign_hosts_and_forwarded_peers(client, settings, headers):
+    settings.environment = "development"
+    settings.local_dev_login = True
+    response = await client.get("/api/auth/login", headers=headers)
+    assert "auth_error=" in response.headers["location"]
+    assert settings.session_cookie_name not in response.cookies
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_servers_listen_on_loopback_without_proxy_headers(monkeypatch, enabled):
+    import run_server
+    from app import cli
+
+    settings = configure(monkeypatch, LOCAL_DEV_LOGIN=str(enabled).lower(), PORT="8123")
+    seen = []
+    for module in (cli, run_server):
+        monkeypatch.setattr(module, "get_settings", lambda: settings)
+        monkeypatch.setattr(module.uvicorn, "run", lambda app, **kwargs: seen.append(kwargs))
+    monkeypatch.setattr(run_server, "configure_environment", lambda: None)
+    monkeypatch.setattr(run_server, "configure_logging", lambda settings: None)
+    cli._serve()
+    run_server.main()
+    assert len(seen) == 2
+    for kwargs in seen:
+        assert (kwargs["host"] == "127.0.0.1") is enabled
+        assert kwargs["proxy_headers"] is not enabled
