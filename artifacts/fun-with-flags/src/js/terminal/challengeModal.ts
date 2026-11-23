@@ -4,7 +4,9 @@ import { invalidateAuthentication, refreshCurrentUser } from '../services/authSe
 import { getCurrentUser } from '../services/authService.js';
 import { checkMail } from '../services/mailService.js';
 
-let active: HTMLDialogElement | null = null;
+type ChallengeDialog = HTMLDialogElement & { trigger?: HTMLElement };
+
+let active: ChallengeDialog | null = null;
 let requestVersion = 0;
 let pendingMailAccount: string | null = null;
 
@@ -30,7 +32,7 @@ export function isChallengeModalOpen(): boolean {
 /** Closing also invalidates any in-flight detail request. */
 export function closeChallengeModal(restoreFocus = true): void {
   requestVersion++;
-  const dialog = active as (HTMLDialogElement & { trigger?: HTMLElement }) | null;
+  const dialog = active;
   if (!dialog) return;
   active = null;
   if (dialog.open) dialog.close();
@@ -46,7 +48,7 @@ export function closeChallengeModal(restoreFocus = true): void {
 export async function openChallengeModal(id: number, trigger: HTMLElement): Promise<void> {
   closeChallengeModal(false);
   const version = ++requestVersion;
-  const dialog = document.createElement('dialog') as HTMLDialogElement & { trigger?: HTMLElement };
+  const dialog = document.createElement('dialog') as ChallengeDialog;
   dialog.trigger = trigger;
   dialog.className = 'challenge-dialog';
   dialog.setAttribute('aria-labelledby', 'challenge-dialog-title');
@@ -132,7 +134,7 @@ export async function openChallengeModal(id: number, trigger: HTMLElement): Prom
     form.append(label, input, submit, feedback);
     body.append(form);
     let pending = false;
-    form.addEventListener('submit', async (event) => {
+    const submitFlag = async (event: SubmitEvent): Promise<void> => {
       event.preventDefault();
       if (pending || !input.value.trim() || active !== dialog || version !== requestVersion) return;
       pending = true;
@@ -192,7 +194,8 @@ export async function openChallengeModal(id: number, trigger: HTMLElement): Prom
           // high zoom, so it is also reachable via Tab and native scrolling.
         }
       }
-    });
+    };
+    form.addEventListener('submit', (event) => { void submitFlag(event); });
   } catch (error) {
     if (active !== dialog || version !== requestVersion) return;
     if (error instanceof AuthRequiredError) {

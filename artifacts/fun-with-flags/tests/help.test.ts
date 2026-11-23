@@ -67,7 +67,7 @@ describe('CTF help guide', () => {
     { is_admin: false, groups: ['funwithflags-admins'] },
     { is_admin: true, groups: ['funwithflags-admins'] },
   ])('lists all visible commands alphabetically: %j', (user) => {
-    const names = [...getHelp(user).matchAll(/^      - (\S+)/gm)].map(match => match[1]);
+    const names = [...getHelp(user).matchAll(/^ {6}- (\S+)/gm)].map(match => match[1]);
     expect(names).toEqual([...names].sort());
   });
 });

@@ -67,8 +67,8 @@ describe('fortune and simulated core', () => {
   });
 
   it('saves the fake core in the current directory only after permission succeeds', async () => {
-    const save = vi.fn(async (_path: string, _content: string) => undefined);
-    const exists = vi.fn(async () => false);
+    const save = vi.fn((_path: string, _content: string) => Promise.resolve(undefined));
+    const exists = vi.fn(() => Promise.resolve(false));
     await runFortune('/home/player', save, exists);
     await runFortune('/home/player', save, exists);
     await runFortune('/home/player', save, exists);
@@ -81,10 +81,8 @@ describe('fortune and simulated core', () => {
   });
 
   it('reports protected-directory errors and never claims the core was saved', async () => {
-    const save = vi.fn(async () => {
-      throw new Error('"/stand/core" Permission denied');
-    });
-    const exists = async () => false;
+    const save = vi.fn(() => Promise.reject(new Error('"/stand/core" Permission denied')));
+    const exists = () => Promise.resolve(false);
     await runFortune('/stand', save, exists);
     await runFortune('/stand', save, exists);
     await runFortune('/stand', save, exists);
@@ -97,8 +95,8 @@ describe('fortune and simulated core', () => {
   });
 
   it('never overwrites an existing core file or symlink', async () => {
-    const save = vi.fn(async () => undefined);
-    const exists = vi.fn(async () => true);
+    const save = vi.fn(() => Promise.resolve(undefined));
+    const exists = vi.fn(() => Promise.resolve(true));
     await runFortune('/home/player', save, exists);
     await runFortune('/home/player', save, exists);
     await runFortune('/home/player', save, exists);

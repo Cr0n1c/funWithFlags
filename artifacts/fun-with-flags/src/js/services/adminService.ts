@@ -11,7 +11,9 @@ export interface UserPointsResult {
   preview: boolean;
 }
 
-export function importUserPoints(user: string, challenge: string, preview: boolean): Promise<UserPointsResult> {
+export function importUserPoints(
+  user: string, challenge: string, preview: boolean,
+): Promise<UserPointsResult> {
   return apiFetch<UserPointsResult>('/admin/user-points/import', {
     method: 'POST', body: JSON.stringify({ user, challenge, preview }),
   });

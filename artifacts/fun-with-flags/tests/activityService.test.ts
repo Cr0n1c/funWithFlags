@@ -26,7 +26,8 @@ describe('command activity metadata', () => {
     expect(JSON.parse(options.body as string)).toEqual({ command: 'scoreboard' });
     expect(options.body).not.toContain('private-flag');
     await recordCommandActivity('curl http://169.254.169.254/latest/meta-data/iam/security-credentials/');
-    const curlBody = JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string);
+    const [, curlRequest] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const curlBody = JSON.parse(curlRequest.body as string) as unknown;
     expect(curlBody).toEqual({ command: 'shell command' });
     fetchMock.mockRejectedValue(new Error('offline'));
     await expect(recordCommandActivity('submit FLAG{private}')).resolves.toBeUndefined();

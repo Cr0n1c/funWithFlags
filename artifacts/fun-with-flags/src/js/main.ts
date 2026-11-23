@@ -31,7 +31,8 @@ const revealSourcePuzzle = () => sourcePuzzle.trigger();
 const terminalContextMenu = (event: MouseEvent) => {
   blockPageContextMenu(event, getCurrentUser()?.groups);
 };
-const sourceShortcut = (event: KeyboardEvent) => blockSourceShortcut(event, getCurrentUser()?.groups);
+const sourceShortcut = (event: KeyboardEvent) =>
+  blockSourceShortcut(event, getCurrentUser()?.groups);
 window.addEventListener(SOURCE_PUZZLE_EVENT, revealSourcePuzzle);
 document.addEventListener('contextmenu', terminalContextMenu, true);
 window.addEventListener('keydown', sourceShortcut, true);

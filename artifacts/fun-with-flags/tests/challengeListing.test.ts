@@ -39,7 +39,8 @@ describe('bare challenge listing', () => {
       let body: unknown;
       if (url.endsWith('/flag-admin/import-challenges')) {
         if (options?.method === 'POST') {
-          expect(JSON.parse(String(options.body))).toEqual({ terminal_missing: ['hello-world'] });
+          expect(JSON.parse(typeof options.body === 'string' ? options.body : ''))
+            .toEqual({ terminal_missing: ['hello-world'] });
           imported = true;
           body = { created: 1, unchanged: 0 };
         } else {
@@ -97,7 +98,9 @@ describe('bare challenge listing', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(rows)))
       .mockResolvedValueOnce(new Response(JSON.stringify(rows.map(c => ({ ...c, solved: true })))))
-      .mockResolvedValueOnce(new Response(JSON.stringify(rows.map(c => ({ ...c, solved: false })))));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(rows.map(c => ({ ...c, solved: false })))),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const visible = (output: string) => parseTerminalText(output).map(segment => segment.text).join('');
     const first = visible(await processCommand('challenges gold'));
@@ -138,7 +141,8 @@ describe('bare challenge listing', () => {
     expect(output).toContain('Puzzle 3');
     expect(output).not.toContain('Puzzle 1');
     expect(output).not.toContain('Puzzle 4');
-    expect(parseTerminalText(output).filter(segment => segment.challengeId).map(segment => segment.challengeId))
+    expect(parseTerminalText(output).filter(segment => segment.challengeId)
+      .map(segment => segment.challengeId))
       .toEqual([2, 2, 3, 3]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith('/api/challenges', expect.anything());
@@ -174,7 +178,8 @@ describe('bare challenge listing', () => {
       expect(output).toContain('Puzzle 1');
       expect(output).not.toContain('Puzzle 2');
       expect(output).not.toContain('Choose a challenge track');
-      expect(fetchMock.mock.calls.slice(before).map(([url]) => url)).toEqual(['/api/challenges']);
+      expect((fetchMock.mock.calls as Array<[string]>).slice(before).map(([url]) => url))
+        .toEqual(['/api/challenges']);
       expect(prefix.textContent).toBe('hpux01$ ');
     }
     expect(['c', 'g', 'd'].flatMap(letter => getAutocompleteSuggestions(`challenges ${letter}`)))

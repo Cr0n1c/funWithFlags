@@ -70,6 +70,10 @@ interface ChallengePagerOptions {
 
 let activePager: ChallengePager | null = null;
 
+function setActivePager(pager: ChallengePager): void {
+  activePager = pager;
+}
+
 /** Drop a paged view before replacing the terminal with the sign-in gate. */
 export function cancelActiveChallengePager(): void {
   activePager?.cancelForAuth();
@@ -126,7 +130,7 @@ export class ChallengePager {
       return false;
     }
 
-    activePager = this;
+    setActivePager(this);
     const wrapper = document.getElementById('terminal-input-wrapper');
     if (wrapper) wrapper.hidden = true;
     this.update();
@@ -148,7 +152,7 @@ export class ChallengePager {
   }
 
   private measure(): void {
-    const terminal = this.options.output.closest('.terminal') as HTMLElement | null;
+    const terminal = this.options.output.closest('.terminal');
     const styles = getComputedStyle(this.content);
     this.lineHeight = Number.parseFloat(styles.lineHeight) ||
       Number.parseFloat(styles.fontSize) || 20;
@@ -167,7 +171,9 @@ export class ChallengePager {
     const fixedPanel = getComputedStyle(this.root).position === 'fixed';
     const availableHeight = Math.max(
       this.lineHeight,
-      fixedPanel ? this.root.clientHeight : Math.min(measuredHeight, viewportHeight) - verticalPadding,
+      fixedPanel
+        ? this.root.clientHeight
+        : Math.min(measuredHeight, viewportHeight) - verticalPadding,
     );
     const statusHeight = this.status.getBoundingClientRect().height || this.lineHeight;
     const outputStyles = getComputedStyle(this.options.output);
@@ -260,7 +266,7 @@ export class ChallengePager {
   }
 
   private resetTerminalScroll(): void {
-    const terminal = this.options.output.closest('.terminal') as HTMLElement | null;
+    const terminal = this.options.output.closest('.terminal');
     if (terminal) terminal.scrollTop = 0;
   }
 

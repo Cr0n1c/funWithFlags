@@ -174,6 +174,12 @@ export interface TerminalTextSegment {
   challengeId?: number;
 }
 
+const SENSITIVE_COMMAND = new RegExp(`\\b(?:${[
+  'curl', 'promote_user_to_admin', 'submit', 'delete_flag', 'create_flag', 'export_flags',
+  'import_flags', 'import_challenges', 'import_user_points', 'login', 'logout', 'passwd', 'su',
+  'sudo',
+].join('|')})\\b`, 'i');
+// eslint-disable-next-line no-control-regex -- OSC 8 hyperlinks are delimited by ESC and BEL
 const OSC_LINK = /\x1b\]8;;([^\x07]*)\x07([\s\S]*?)\x1b\]8;;\x07/g;
 
 /** Parse the tiny OSC-8 subset emitted by this app; all labels remain plain text. */
@@ -485,7 +491,9 @@ function leaderboardRow(e: LeaderboardEntry, highlight = false): string[] {
   ];
 }
 
-export function formatLeaderboard(entries: LeaderboardEntry[], me: LeaderboardEntry | null): string {
+export function formatLeaderboard(
+  entries: LeaderboardEntry[], me: LeaderboardEntry | null,
+): string {
   if (entries.length === 0 && !me) {
     return '    Nobody has scored yet. Be the first!';
   }
@@ -632,7 +640,7 @@ async function openVi(
       try {
         await (await shell()).saveFile(session.path, content);
       } catch (error) {
-        throw new Error(describeError(error));
+        throw new Error(describeError(error), { cause: error });
       }
     },
     close: () => undefined,
@@ -727,7 +735,7 @@ export async function processCommand(
 
   // History is a prompt-level event, before cd changes cwd. Never retain flag
   // submissions, admin inputs, or authentication credentials in browser storage.
-  if (!/\b(?:curl|promote_user_to_admin|submit|delete_flag|create_flag|export_flags|import_flags|import_challenges|import_user_points|login|logout|passwd|su|sudo)\b/i.test(raw)
+  if (!SENSITIVE_COMMAND.test(raw)
     && !/\b(?:password|passwd|secret|token|authorization|credential|api[_-]?key)\s*=/i.test(raw)) {
     await (await shell()).recordUserCommand(rawLine);
   }

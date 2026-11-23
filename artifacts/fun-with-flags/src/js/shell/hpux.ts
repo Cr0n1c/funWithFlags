@@ -1352,7 +1352,7 @@ async function createAccountSandbox(
         );
       }
       const value: unknown = Reflect.get(target, property, target);
-      return typeof value === 'function' ? value.bind(target) : value;
+      return typeof value === 'function' ? (value.bind(target) as unknown) : value;
     },
   });
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');

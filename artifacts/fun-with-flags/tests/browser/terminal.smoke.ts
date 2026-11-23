@@ -6,8 +6,8 @@ import { configureOfflineTimeouts, reloadWithDiagnostics, startupDiagnostics } f
 import { sharedHookPhase, sharedHookTeardown } from './shared-hook-diagnostics.js';
 import {
   assertPromptRestored, beginKnock, dismissMatrixReward, disposeMatrix, expireMatrixIdentity,
-  followRabbit, matrixTestHooks, prepareMatrix, refreshMatrixIdentity, suspendMatrixAudio, traceAudio,
-  matrixRuntime, reachActiveMatrixStage,
+  followRabbit, matrixTestHooks, prepareMatrix, refreshMatrixIdentity, suspendMatrixAudio,
+  traceAudio, matrixRuntime, reachActiveMatrixStage,
 } from './idle-matrix-journeys.js';
 import { build } from 'vite';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -265,7 +265,9 @@ interface SyntheticSession {
   scopedSubmissions?: number;
   scopedResponse?: 'incorrect' | 'correct' | 'already' | 'unauthorized';
   releaseSubmission?: Promise<void>;
-  mailEvents: Array<{ id: number; outcome: string; points: number; time: string; challenge_id: number | null }>;
+  mailEvents: Array<{
+    id: number; outcome: string; points: number; time: string; challenge_id: number | null;
+  }>;
 }
 
 interface GoldRow {
@@ -343,7 +345,7 @@ async function withTerminal(
         return json({ commands: ['submit', 'scoreboard', 'promote_user_to_admin'] });
       }
       if (url.origin === origin && path === '/api/cli/curl' && request.method() === 'POST') {
-        const body = request.postDataJSON();
+        const body = request.postDataJSON() as { url?: string };
         if (Object.keys(body).join(',') === 'url'
             && body.url === 'http://169.254.169.254/latest/meta-data/iam/') {
           return json({ output: 'security-credentials/' });
@@ -355,14 +357,15 @@ async function withTerminal(
         if (path === '/api/training/invoices/1043' && request.method() === 'GET')
           return json({ flag: 'offline-invoice-flag' });
         if (path === '/api/training/profile' && request.method() === 'POST'
-            && request.postDataJSON().role === 'admin')
+            && (request.postDataJSON() as { role?: string }).role === 'admin')
           return json({ flag: 'offline-profile-flag' });
         if (path === '/api/training/files' && request.method() === 'GET'
             && url.searchParams.get('path') === '../internal/release.txt')
           return json({ content: 'offline-file-flag' });
       }
       if (url.origin === origin && path === '/api/cli/promote_user_to_admin' && request.method() === 'POST') {
-        const valid = request.postDataJSON().token === 'ctf-only.7e19b42d.93ac608f.bundle';
+        const posted = request.postDataJSON() as { token?: string };
+        const valid = posted.token === 'ctf-only.7e19b42d.93ac608f.bundle';
         return valid ? json({ flag: 'offline-bundle-flag', message: 'Account privileges unchanged.' })
           : json({ detail: 'Invalid challenge token' }, 403);
       }
@@ -419,7 +422,9 @@ async function withTerminal(
       if (url.origin === origin && path === '/api/flag-admin/import-flags' && request.method() === 'POST') {
         session.backupImportRequests++;
         if (!session.user?.groups.includes('funwithflags-admins')) return json({ detail: 'Permission denied' }, 403);
-        return json({ created: session.backupPreview.missing, identical: session.backupPreview.identical });
+        return json({
+          created: session.backupPreview.missing, identical: session.backupPreview.identical,
+        });
       }
       if (url.origin === origin && path === '/api/flag-admin/import-challenges'
           && request.method() === 'GET') {
@@ -443,7 +448,7 @@ async function withTerminal(
         const missing = session.hashMissing;
         if (Object.keys(body).sort().join(',') !== [...missing, 'terminal_missing'].sort().join(',')
             || !missing.every(name => typeof body[name] === 'string'
-              && (body[name] as string).startsWith('offline-only-'))
+              && (body[name]).startsWith('offline-only-'))
             || JSON.stringify(body.terminal_missing) !== JSON.stringify(session.terminalMissing)) {
           failures.push('Invalid offline import request');
           return json({ detail: 'Invalid import' }, 400);
@@ -457,7 +462,9 @@ async function withTerminal(
       }
       if (url.origin === origin && request.method() === 'POST' && path === '/api/admin/user-points/import') {
           if (!session.user?.groups.includes('funwithflags-admins')) return json({ detail: 'Forbidden' }, 403);
-          const body = request.postDataJSON();
+          const body = request.postDataJSON() as {
+            user?: string; challenge?: string; preview?: boolean;
+          };
           expect(body.user).toBe('Demo Speaker');
           expect(body.challenge).toBe('talk-demo-day-2026-10-09');
           const already = !!session.userPointsAwarded;
@@ -593,28 +600,6 @@ async function ready(page: Page) {
     await expect.poll(() => page.locator('#terminal-input').getAttribute('data-command-busy'))
       .not.toBe('true');
   } finally { finished(); }
-}
-
-type MatrixSessionWindow = Window & {
-  offlineMatrixSession: { logout: () => Promise<string>; refresh: () => Promise<void> };
-  matrixCancelAudio: { opened: number; closed: number; oscillators: number };
-  matrixAudioContexts: AudioContext[];
-};
-
-async function observeMatrixAudio(page: Page) {
-  // Count real context cleanup and sound scheduling, not device audio output
-  // or autoplay-policy behavior. This observer survives only this document.
-  await page.addInitScript(() => {
-    const counts = { opened: 0, closed: 0, oscillators: 0 };
-    const contexts: AudioContext[] = [];
-    Object.assign(window, { matrixCancelAudio: counts, matrixAudioContexts: contexts });
-    const NativeAudioContext = window.AudioContext;
-    window.AudioContext = class extends NativeAudioContext {
-      constructor() { super(); counts.opened++; contexts.push(this); }
-      override close() { counts.closed++; return super.close(); }
-      override createOscillator() { counts.oscillators++; return super.createOscillator(); }
-    };
-  });
 }
 
 async function command(page: Page, text: string, expected: string | RegExp) {
@@ -1135,7 +1120,9 @@ it('preserves alias redirections, temporary variables and pipeline streams offli
 
 // Lifo saves after a debounce, not when the shell command resolves. Observe a
 // committed snapshot before navigation; never substitute a fixed sleep or seed it.
-async function persistedFile(page: Page, accountId: string, path: string, content: string | RegExp) {
+async function persistedFile(
+  page: Page, accountId: string, path: string, content: string | RegExp,
+) {
   await expect.poll(() => page.evaluate(async ({ accountId, path }) => {
     const name = `lifo-fwf-account-${accountId}`;
     if (!(await indexedDB.databases()).some((db) => db.name === name)) return null;
@@ -1667,7 +1654,9 @@ for (const [text, stage] of [
     await withTerminal(true, async (page, session) => {
       await ready(page);
       await command(page, 'echo PRIVATE-SYNTHETIC-FILE > /tmp/presentation-owner.txt', /./);
-      await page.evaluate(() => { (window as CommandOwnershipWindow).__terminalCommandSettled = 0; });
+      await page.evaluate(() => {
+        (window as CommandOwnershipWindow).__terminalCommandSettled = 0;
+      });
       const held = await holdCommand(page, stage === 'history' ? `__history:${text}` : '__editor');
       const input = page.locator('#terminal-input');
       await input.focus();
@@ -2125,7 +2114,7 @@ for (const refreshStatus of [200, 503]) {
   it(`idle Matrix: another tab's award is learned by polling${refreshStatus === 503 ? ' after a failed refresh recovers' : ''} without a local solve event or reload`, async () => {
     await withMatrixCompletion(false, async (page, session, checks, initial) => {
       const originalDocument = await completionDocument(page);
-      initial.release();
+      await initial.release();
       await statusSettled(page, 1);
       expect(checks.requests).toEqual([{ account: user.account_id, solved: false }]);
       // Reset evidence from boot: only a newly applied result can prove that
@@ -2161,7 +2150,8 @@ for (const refreshStatus of [200, 503]) {
         expect(checks.requests[1]).toEqual({ account: user.account_id, solved: true });
         refresh.release();
         await statusSettled(page, 2);
-        expect(await takeAppliedCompletionStatuses(page)).toEqual(refreshStatus === 200 ? [true] : []);
+        expect(await takeAppliedCompletionStatuses(page))
+          .toEqual(refreshStatus === 200 ? [true] : []);
         expect(await takeFailedCompletionWrites(page)).toBe(refreshStatus === 200 ? 0 : 1);
         if (refreshStatus === 503) {
           // Hold recovery past the idle deadline. Failure must leave eligibility
@@ -2744,7 +2734,8 @@ for (const replacement of [false, true]) {
       await replaceMatrix(page);
       await page.clock.runFor(1000);
       await statusSettled(page, replacement ? 4 : 2);
-      expect(await appliedStatuses(page)).toEqual(replacement ? [true, false, false, true] : [true, true]);
+      expect(await appliedStatuses(page))
+        .toEqual(replacement ? [true, false, false, true] : [true, true]);
       await page.clock.resume();
       await page.locator('#terminal-input').focus();
       await page.keyboard.type('matrix_test');
@@ -2896,7 +2887,7 @@ for (const method of ['logout', 'expiry'] as const) {
               .toBe(runtimeBefore.heartbeats + (guard === 'heartbeat' ? 1 : 0));
             await expect.poll(async () => (await traceAudio(page)).states).toEqual(['closed']);
             expect((await traceAudio(page)).closed).toBe(1);
-            const stoppedText = await oldNotice!.textContent();
+            const stoppedText = await oldNotice.textContent();
             await page.keyboard.press('End');
             await page.keyboard.type('-safe');
             expect(await page.locator('#terminal-input').innerText()).toBe('echo resumed-safe');
@@ -2904,7 +2895,7 @@ for (const method of ['logout', 'expiry'] as const) {
             // Cross both the remaining typing and knock deadlines. No old key
             // handler, timer, or audio unlock may take ownership back.
             await page.clock.runFor(15_000);
-            expect(await oldNotice!.textContent()).toBe(stoppedText);
+            expect(await oldNotice.textContent()).toBe(stoppedText);
             const audioAfter = await traceAudio(page);
             expect(audioAfter.starts).toEqual(audioBefore.starts);
             expect(audioAfter.resumes).toEqual(audioBefore.resumes);
@@ -3130,7 +3121,8 @@ async function narrowTable(page: Page, pager: Locator) {
     if (center >= cell.clipTop && center < cell.clipBottom) break;
     await page.keyboard.press('Enter');
   }
-  expect(await viewport.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(await viewport.evaluate((element) => element.scrollWidth > element.clientWidth))
+    .toBe(true);
   expect((await points()).left).toBeGreaterThan((await points()).clipRight);
   await viewport.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
   await expect.poll(() => viewport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
@@ -3150,7 +3142,9 @@ async function narrowTable(page: Page, pager: Locator) {
     range.setStart(node, node.textContent!.length - 'RIGHT-EDGE'.length);
     range.setEnd(node, node.textContent!.length);
     const rect = range.getBoundingClientRect();
-    return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+    return element.contains(
+      document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2),
+    );
   }), { message: 'Scrolled title link must be exposed and hit-testable' }).toBe(true);
   await viewport.evaluate((element) => { element.scrollLeft = 0; });
   expect(await ticket.getAttribute('class')).toContain('challenge-link');
@@ -3231,7 +3225,9 @@ it('keeps paging usable through desktop and phone resizes and accepts exactly on
         expect(metrics.pageHeight).toBeGreaterThan(400);
         await stableHeight();
         await narrowTable(page, pager);
-        const statusHeight = await status.evaluate((element) => element.getBoundingClientRect().height);
+        const statusHeight = await status.evaluate(
+          (element) => element.getBoundingClientRect().height,
+        );
         if (page.viewportSize()!.width === 375) {
           expect(statusHeight, 'Narrow instructions must wrap without clipping').toBeGreaterThan(metrics.lineHeight);
         }

@@ -7,10 +7,10 @@ describe('offline alias metadata dispatch', () => {
     await sb.fs.mkdir('/tmp/alias-regressions', { recursive: true });
     await runShell('cd /tmp/alias-regressions');
     // Local commands avoid lazy Node/cloud dependencies and expose all streams.
-    sb.shell.getRegistry().register('alias_probe', async (ctx) => {
+    sb.shell.getRegistry().register('alias_probe', (ctx) => {
       ctx.stdout.write(`${JSON.stringify(ctx.args)}:${ctx.env.ALIAS_TEMP ?? 'unset'}\n`);
       ctx.stderr.write('probe-error\n');
-      return 7;
+      return Promise.resolve(7);
     });
     sb.shell.getRegistry().register('alias_copy', async (ctx) => {
       ctx.stdout.write(await ctx.stdin?.readAll() ?? '');

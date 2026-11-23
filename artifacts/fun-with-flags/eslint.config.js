@@ -13,6 +13,7 @@ export default tseslint.config(
           allowDefaultProject: [
             'eslint.config.js', 'vite.config.ts',
             'scripts/test-clipboard.mjs', 'scripts/test-idle-matrix.mjs',
+            'scripts/apply-lifo-patch.mjs',
           ],
         },
         tsconfigRootDir: import.meta.dirname,
@@ -30,6 +31,7 @@ export default tseslint.config(
     files: [
       'eslint.config.js', 'vite.config.ts', 'vitest.config.ts',
       'scripts/test-clipboard.mjs', 'scripts/test-idle-matrix.mjs',
+      'scripts/apply-lifo-patch.mjs',
     ],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: { globals: { ...globals.node } },

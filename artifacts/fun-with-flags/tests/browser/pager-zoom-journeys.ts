@@ -32,7 +32,9 @@ async function exposedText(target: Locator) {
       element.contains(document.elementFromPoint(
         (rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))));
     return rects.length > 0 && clipped.length === 0 ? true : {
-      rects: clipped.map(rect => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height })),
+      rects: clipped.map(rect => (
+        { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      )),
       covering: clipped.map(rect => document.elementFromPoint(
         (rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2,
       )?.className),
@@ -88,7 +90,8 @@ export async function pagerDesktopJourney(
         const rect = element.getBoundingClientRect();
         return element.matches(':focus-visible') && style.outlineStyle === 'solid' &&
           parseFloat(style.outlineWidth) >= 2 && style.outlineColor !== 'rgba(0, 0, 0, 0)' &&
-          rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight &&
+          rect.left >= 0 && rect.right <= innerWidth
+          && rect.top >= 0 && rect.bottom <= innerHeight &&
           element.contains(document.elementFromPoint(rect.left + 2, rect.top + 2)) &&
           element.contains(document.elementFromPoint(rect.right - 2, rect.bottom - 2));
       })).toBe(true);
@@ -112,7 +115,8 @@ export async function pagerDesktopJourney(
       await page.keyboard.press('ArrowRight');
       if (await horizontalOffset() === previous) break;
     }
-    expect(await horizontalOffset()).toBeCloseTo((await geometry()).scrollWidth - (await geometry()).width);
+    expect(await horizontalOffset())
+      .toBeCloseTo((await geometry()).scrollWidth - (await geometry()).width);
     expect(await offset()).toBe(verticalOffset);
     await expect.poll(() => viewport.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
     await expect.poll(() => viewport.evaluate(element => {
@@ -130,7 +134,10 @@ export async function pagerDesktopJourney(
           if (centerY <= clip.top || centerY >= clip.bottom) continue;
           const hit = document.elementFromPoint((rect.left + rect.right) / 2, centerY);
           return rect.left >= clip.left && rect.right <= clip.right && element.contains(hit)
-            ? true : { rect: rect.toJSON(), clip: clip.toJSON(), covering: hit?.className };
+            ? true : {
+              rect: rect.toJSON() as unknown, clip: clip.toJSON() as unknown,
+              covering: hit?.className,
+            };
         }
       }
       return false;

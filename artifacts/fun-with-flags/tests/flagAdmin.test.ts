@@ -35,6 +35,17 @@ import {
 import { processCommand, redactSensitiveCommand } from '../src/js/terminal/terminal.js';
 import { getAutocompleteSuggestions } from '../src/js/handlers/commands.js';
 
+type FetchCall = [url: string, init?: { body?: string; method?: string }];
+interface MockCalls { mock: { calls: unknown[][]; lastCall?: unknown[] } }
+
+const fetchCalls = (mock: MockCalls): FetchCall[] => mock.mock.calls as FetchCall[];
+const sentBody = (mock: MockCalls, index: number): string | undefined =>
+  fetchCalls(mock)[index]?.[1]?.body;
+const sentJson = (mock: MockCalls, index: number): Record<string, unknown> =>
+  JSON.parse(String(sentBody(mock, index))) as Record<string, unknown>;
+const lastUpdate = (mock: MockCalls): { output?: string; prompt?: string } | undefined =>
+  mock.mock.lastCall?.[0] as { output?: string; prompt?: string } | undefined;
+
 const normalPrompt = 'player@hpux01:$ ';
 const created = {
   slug: 'random-8c903',
@@ -80,8 +91,8 @@ describe('flag admin API contract', () => {
     expect(await previewFlagBackup(payload)).toEqual({ missing: 0, identical: 0, conflicts: 0 });
     expect(await importFlagBackup(payload)).toEqual({ created: 1, identical: 0 });
     expect(await downloadFlagBackup(() => true)).toBe(1);
-    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(payload);
-    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(payload);
+    expect(sentBody(fetchMock, 0)).toBe(payload);
+    expect(sentBody(fetchMock, 1)).toBe(payload);
     expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/flag-admin/export-flags');
     expect(clicked).toHaveBeenCalledOnce();
     expect(removed).toHaveBeenCalledOnce();
@@ -147,13 +158,13 @@ describe('flag admin API contract', () => {
     const update = vi.fn();
     const select = async () => {
       const input = [...nodes].reverse().find(node => node.type === 'file')!;
-      input.files = [{ size: payload.length, text: async () => payload }];
+      input.files = [{ size: payload.length, text: () => Promise.resolve(payload) }];
       await input.handlers.change?.();
     };
     await beginImportFlags(normalPrompt, update);
     expect([...nodes].reverse().find(node => node.type === 'file')).toBeDefined();
     await select();
-    expect(update.mock.lastCall?.[0].output).toContain('No import request sent');
+    expect(lastUpdate(update)?.output).toContain('No import request sent');
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     await beginImportFlags(normalPrompt, update);
@@ -162,7 +173,7 @@ describe('flag admin API contract', () => {
     await chooser.handlers.change?.(); // native picker cancelled; still usable
     expect(hasGuidedSession()).toBe(true);
     await select();
-    expect(update.mock.lastCall?.[0].prompt).toBe('Import missing flags? [y/N]: ');
+    expect(lastUpdate(update)?.prompt).toBe('Import missing flags? [y/N]: ');
     expect(cancelGuidedSession()?.output).toBe('Cancelled.');
     expect(chooser.value).toBe('');
     expect(fetchMock).toHaveBeenCalledTimes(4); // no commit on cancellation
@@ -173,7 +184,7 @@ describe('flag admin API contract', () => {
     expect(result.output).toContain('1 created, 2 identical unchanged');
     expect(result.refresh).toBe(true);
     expect(fetchMock.mock.calls[6]?.[0]).toBe('/api/flag-admin/import-flags');
-    expect(fetchMock.mock.calls[6]?.[1]?.body).toBe(payload);
+    expect(sentBody(fetchMock, 6)).toBe(payload);
     expect(hasGuidedSession()).toBe(false);
   });
   it('uses the fixed paths, methods, and JSON shapes', async () => {
@@ -197,13 +208,13 @@ describe('flag admin API contract', () => {
       deleted: true, title: preview.title, points: preview.points,
     });
 
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    expect(fetchCalls(fetchMock).map(([url]) => url)).toEqual([
       '/api/flag-admin/access',
       '/api/flag-admin/flags',
       '/api/flag-admin/delete-preview',
       `/api/flag-admin/flags/${preview.slug}`,
     ]);
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    expect(sentJson(fetchMock, 1)).toEqual({
       title: created.title,
       description: created.description,
       flag: 'xsecurity{gold}',
@@ -274,7 +285,7 @@ describe('create_flag guided state', () => {
 
     expect(result).toEqual(expect.objectContaining({ done: true, prompt: normalPrompt }));
     expect(result.output).toContain('Created gold challenge');
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)).hidden).toBe(true);
+    expect(sentJson(fetchMock, 1).hidden).toBe(true);
     expect(hasGuidedSession()).toBe(false);
   });
 
@@ -289,7 +300,7 @@ describe('create_flag guided state', () => {
     await handleGuidedInput('xsecurity{secret}');
     await handleGuidedInput('0');
     await handleGuidedInput(no);
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual(
+    expect(sentJson(fetchMock, 1)).toEqual(
       expect.objectContaining({ points: 0, hidden: false }),
     );
   });
@@ -399,7 +410,7 @@ describe('import_challenges guided state', () => {
     expect(staged.output).not.toContain('synthetic-extra-hard-answer');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect((await handleGuidedInput('yes')).output).toContain('1 created');
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    expect(sentJson(fetchMock, 1)).toEqual({
       'extra-hard': 'synthetic-extra-hard-answer', terminal_missing: [],
     });
     expect(hasGuidedSession()).toBe(false);
@@ -439,7 +450,7 @@ describe('import_challenges guided state', () => {
     const result = await handleGuidedInput('yes');
     expect(result).toEqual(expect.objectContaining({ done: true, refresh: true }));
     expect(result.output).toContain('3 created, 7 existing unchanged');
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    expect(sentJson(fetchMock, 1)).toEqual({
       easy: 'offline-only-easy', medium: 'offline-only-medium', hard: 'offline-only-hard',
       terminal_missing: [],
     });
@@ -481,7 +492,7 @@ describe('import_challenges guided state', () => {
     expect((await handleGuidedInput('yes')).prompt).toBe('Medium original word (masked): ');
     expect((await handleGuidedInput('offline-medium')).prompt).toBe('Import missing challenges now? [y/N]: ');
     expect((await handleGuidedInput('yes')).output).toContain('1 created, 9 existing unchanged');
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    expect(sentJson(fetchMock, 1)).toEqual({
       medium: 'offline-medium', terminal_missing: [],
     });
     expect((await beginImportChallenges(normalPrompt)).done).toBe(true);
@@ -502,7 +513,7 @@ describe('import_challenges guided state', () => {
     const result = await handleGuidedInput('yes');
     expect(result.output).toContain('1 created, 9 existing unchanged');
     expect(result.refresh).toBe(true);
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    expect(sentJson(fetchMock, 1)).toEqual({
       terminal_missing: ['shell-backups'],
     });
   });
@@ -518,7 +529,7 @@ describe('import_challenges guided state', () => {
     expect((await handleGuidedInput('yes')).prompt).toBe('Medium original word (masked): ');
     expect((await handleGuidedInput('offline-medium')).prompt).toBe('Import missing challenges now? [y/N]: ');
     expect((await handleGuidedInput('yes')).output).toContain('2 created, 8 existing unchanged');
-    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+    expect(sentJson(fetchMock, 1)).toEqual({
       medium: 'offline-medium', terminal_missing: ['shell-backups'],
     });
   });

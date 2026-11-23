@@ -155,7 +155,7 @@ export async function beginImportFlags(
     };
     session = current;
     button.addEventListener('click', () => input.click());
-    input.addEventListener('change', async () => {
+    const previewSelection = async (): Promise<void> => {
       const file = input.files?.[0];
       input.value = '';
       if (!file || session !== current || current.step !== 'select') return;
@@ -193,11 +193,14 @@ export async function beginImportFlags(
           ? 'Permission denied' : error instanceof AuthRequiredError
             ? 'Session expired' : 'Unable to preview backup. Check format, version and flag key, then choose another file.',
         prompt: normalPrompt, done: false, authLost: error instanceof AuthRequiredError });
-        if (error instanceof AuthRequiredError || error instanceof ApiError && error.status === 403) clearSession();
+        if (error instanceof AuthRequiredError
+          || error instanceof ApiError && error.status === 403) clearSession();
       } finally {
         if (session === current && current.step === 'select') button.disabled = false;
       }
-    });
+    };
+    // The listener still returns its promise so callers that invoke it directly can await it.
+    input.addEventListener('change', previewSelection as () => void);
     return { display: '', output: 'Choose a local JSON backup using the button below. Escape or Ctrl+C cancels.',
       prompt: normalPrompt, done: false };
   } catch (error) {

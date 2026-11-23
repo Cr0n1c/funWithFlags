@@ -77,7 +77,9 @@ export interface HashPuzzleStatus {
   missing?: boolean;
 }
 
-export function getChallengeImportStatus(): Promise<{ puzzles: HashPuzzleStatus[]; terminal: HashPuzzleStatus[] }> {
+export function getChallengeImportStatus(): Promise<{
+  puzzles: HashPuzzleStatus[]; terminal: HashPuzzleStatus[];
+}> {
   return apiFetch<{ puzzles: HashPuzzleStatus[]; terminal: HashPuzzleStatus[] }>('/flag-admin/import-challenges');
 }
 

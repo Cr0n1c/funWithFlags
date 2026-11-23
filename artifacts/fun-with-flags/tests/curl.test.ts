@@ -7,7 +7,7 @@ vi.mock('../src/js/services/authService.js', () => ({
 }));
 vi.mock('../src/js/services/ctfService.js', async (original) => ({
   ...await original<object>(),
-  curlPublicUrl: vi.fn(async (url: string) => ({
+  curlPublicUrl: vi.fn((url: string) => Promise.resolve({
     output: url.endsWith('/iam/security-credentials/ctf-instance-role')
       ? '{ "flag": "always_check_ssrf_imdsv1" }' : '1.0\n2021-07-15\nlatest\n',
   })),

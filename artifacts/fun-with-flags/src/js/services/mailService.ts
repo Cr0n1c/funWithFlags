@@ -38,6 +38,7 @@ function writeCursor(accountId: string, cursor: Cursor): void {
   localStorage.setItem(key(accountId), JSON.stringify(cursor));
 }
 function safeLine(value: string): string {
+  // eslint-disable-next-line no-control-regex -- stripping control characters is the purpose
   return value.replace(/[\r\n\x00-\x1f\x7f]/g, ' ').slice(0, 100);
 }
 function formatGold(event: GoldEvent): string {
@@ -51,7 +52,9 @@ function formatGold(event: GoldEvent): string {
 let queue: Promise<unknown> = Promise.resolve();
 const warned = new Set<string>();
 /** A request-owned check; no polling, score inference or submitted flag content. */
-export function checkMail(accountId: string): Promise<{ delivered: number; warning: string | null }> {
+export function checkMail(
+  accountId: string,
+): Promise<{ delivered: number; warning: string | null }> {
   const run = async (): Promise<{ delivered: number; warning: string | null }> => {
     if (getCurrentUser()?.account_id !== accountId) return { delivered: 0, warning: null };
     let delivered = 0;
@@ -72,7 +75,9 @@ export function checkMail(accountId: string): Promise<{ delivered: number; warni
         if (getCurrentUser()?.account_id !== accountId) return { delivered, warning: null };
         for (const event of page.gold) {
           if (event.id <= cursor.gold) continue;
-          if (!await deliverShellMail(accountId, formatGold(event))) return { delivered, warning: null };
+          if (!await deliverShellMail(accountId, formatGold(event))) {
+            return { delivered, warning: null };
+          }
           cursor.gold = event.id;
           writeCursor(accountId, cursor);
           delivered++;
