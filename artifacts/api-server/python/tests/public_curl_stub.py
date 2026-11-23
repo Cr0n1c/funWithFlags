@@ -32,19 +32,34 @@ def run():
         # Observe the fresh interpreter before replacing any TLS functions.
         # Record only fixed booleans/counts, never environment values.
         context = ssl.create_default_context()
-        Path(marker).write_text(json.dumps({
-            # CPython coerces the locale; the Nix interpreter wrapper can add
-            # its own library paths. Neither may carry parent configuration.
-            "minimal_environment": (
-                set(os.environ) <= {"LC_CTYPE", "LD_LIBRARY_PATH"}
-                and all(path.startswith("/nix/store/")
-                        for path in os.environ.get("LD_LIBRARY_PATH", "").split(":") if path)
-            ),
-            "python_overrides_ignored": bool(sys.flags.ignore_environment),
-            "hostname_verification": context.check_hostname,
-            "certificate_verification": context.verify_mode == ssl.CERT_REQUIRED,
-            "trusted_ca_count": context.cert_store_stats()["x509_ca"],
-        }))
+        # OpenSSL loads a certificate directory lazily, so a store configured that way
+        # reports no preloaded authorities even though verification works.
+        capath = ssl.get_default_verify_paths().capath
+        Path(marker).write_text(
+            json.dumps(
+                {
+                    # CPython coerces the locale, macOS injects its text-encoding
+                    # variable, and the Nix interpreter wrapper can add its own
+                    # library paths. None may carry parent configuration.
+                    "minimal_environment": (
+                        set(os.environ)
+                        <= {"LC_CTYPE", "LD_LIBRARY_PATH", "__CF_USER_TEXT_ENCODING"}
+                        and all(
+                            path.startswith("/nix/store/")
+                            for path in os.environ.get("LD_LIBRARY_PATH", "").split(":")
+                            if path
+                        )
+                    ),
+                    "python_overrides_ignored": bool(sys.flags.ignore_environment),
+                    "hostname_verification": context.check_hostname,
+                    "certificate_verification": context.verify_mode == ssl.CERT_REQUIRED,
+                    "trusted_ca_count": context.cert_store_stats()["x509_ca"],
+                    "trusted_ca_directory": bool(
+                        capath and os.path.isdir(capath) and any(os.scandir(capath))
+                    ),
+                }
+            )
+        )
 
     def stall(*args, **kwargs):
         Path(marker).touch()
@@ -61,7 +76,7 @@ def run():
 
     # Patch in this new interpreter, before calling production worker code.
     # No path (including unexpected lookups/connections) reaches the network.
-    socket.getaddrinfo = resolve
+    socket.getaddrinfo = resolve  # ty: ignore[invalid-assignment]
     sock = Mock()
     socket.socket = Mock(return_value=sock)
     context = Mock()

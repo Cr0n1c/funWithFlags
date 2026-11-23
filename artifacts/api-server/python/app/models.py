@@ -87,7 +87,9 @@ class SamlTransaction(Base):
     request_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     popup: Mapped[bool] = mapped_column(Boolean, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True,
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
     )
 
 
@@ -131,7 +133,8 @@ class PlayerScoreboard(Base):
 
     __tablename__ = "player_scoreboard"
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     solves: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -28,13 +28,21 @@ from tests.conftest import make_challenge, make_user, session_cookie
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 NAME = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Local test IdP")])
-CERT = (x509.CertificateBuilder().subject_name(NAME).issuer_name(NAME)
-        .public_key(KEY.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(datetime.now(UTC) - timedelta(days=1))
-        .not_valid_after(datetime.now(UTC) + timedelta(days=1)).sign(KEY, hashes.SHA256())
-        .public_bytes(serialization.Encoding.PEM).decode())
-PRIVATE = KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                            serialization.NoEncryption()).decode()
+CERT = (
+    x509.CertificateBuilder()
+    .subject_name(NAME)
+    .issuer_name(NAME)
+    .public_key(KEY.public_key())
+    .serial_number(x509.random_serial_number())
+    .not_valid_before(datetime.now(UTC) - timedelta(days=1))
+    .not_valid_after(datetime.now(UTC) + timedelta(days=1))
+    .sign(KEY, hashes.SHA256())
+    .public_bytes(serialization.Encoding.PEM)
+    .decode()
+)
+PRIVATE = KEY.private_bytes(
+    serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+).decode()
 
 
 @pytest.fixture
@@ -48,42 +56,70 @@ def configured(settings):
     return settings
 
 
-def assertion(s, request_id, *, subject="stable-123", aid=None, expired=False,
-              audience=None, issuer=None, recipient=None, attributes=None, signed=True,
-              restrictions=None, name_qualifier=None, sp_name_qualifier=None,
-              signing_key=PRIVATE, signing_cert=CERT):
+def assertion(
+    s,
+    request_id,
+    *,
+    subject="stable-123",
+    aid=None,
+    expired=False,
+    audience=None,
+    issuer=None,
+    recipient=None,
+    attributes=None,
+    signed=True,
+    restrictions=None,
+    name_qualifier=None,
+    sp_name_qualifier=None,
+    signing_key=PRIVATE,
+    signing_cert=CERT,
+):
     now = datetime.now(UTC)
+
     def stamp(t):
         return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     expiry = stamp(now + timedelta(minutes=-10 if expired else 5))
     issuer = issuer or s.saml_idp_entity_id
     audience = audience or s.saml_sp_entity_id
     recipient = recipient or s.saml_acs_url
     restrictions = [[audience]] if restrictions is None else restrictions
     audience_xml = "".join(
-        "<saml:AudienceRestriction>" + "".join(
-            f"<saml:Audience>{escape(value)}</saml:Audience>" for value in clause
-        ) + "</saml:AudienceRestriction>" for clause in restrictions
+        "<saml:AudienceRestriction>"
+        + "".join(f"<saml:Audience>{escape(value)}</saml:Audience>" for value in clause)
+        + "</saml:AudienceRestriction>"
+        for clause in restrictions
     )
     qualifiers = "".join(
-        f' {key}="{escape(value)}"' for key, value in
-        [("NameQualifier", name_qualifier), ("SPNameQualifier", sp_name_qualifier)]
+        f' {key}="{escape(value)}"'
+        for key, value in [
+            ("NameQualifier", name_qualifier),
+            ("SPNameQualifier", sp_name_qualifier),
+        ]
         if value is not None
     )
-    attrs = attributes or {"email": ["alice@example.test"], "firstname": ["Alice"],
-                          "lastname": ["Example"], "departmentparent": ["Engineering"],
-                          "departmentleaf": ["Security"], "level": ["L5"]}
-    attrxml = "".join(f'<saml:Attribute Name="{k}">' + "".join(
-        f'<saml:AttributeValue>{escape(v)}</saml:AttributeValue>' for v in values
-    ) + "</saml:Attribute>" for k, values in attrs.items())
+    attrs = attributes or {
+        "email": ["alice@example.test"],
+        "firstname": ["Alice"],
+        "lastname": ["Example"],
+        "departmentparent": ["Engineering"],
+        "departmentleaf": ["Security"],
+        "level": ["L5"],
+    }
+    attrxml = "".join(
+        f'<saml:Attribute Name="{k}">'
+        + "".join(f"<saml:AttributeValue>{escape(v)}</saml:AttributeValue>" for v in values)
+        + "</saml:Attribute>"
+        for k, values in attrs.items()
+    )
     xml = f'''<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
-      ID="{aid or '_' + secrets.token_hex(16)}" Version="2.0" IssueInstant="{stamp(now)}">
+      ID="{aid or "_" + secrets.token_hex(16)}" Version="2.0" IssueInstant="{stamp(now)}">
       <saml:Issuer>{issuer}</saml:Issuer><saml:Subject>
       <saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"{qualifiers}>{subject}</saml:NameID>
       <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
       <saml:SubjectConfirmationData InResponseTo="{request_id}" NotOnOrAfter="{expiry}" Recipient="{recipient}"/>
       </saml:SubjectConfirmation></saml:Subject>
-      <saml:Conditions NotBefore="{stamp(now-timedelta(minutes=1))}" NotOnOrAfter="{expiry}">
+      <saml:Conditions NotBefore="{stamp(now - timedelta(minutes=1))}" NotOnOrAfter="{expiry}">
       {audience_xml}
       </saml:Conditions><saml:AuthnStatement AuthnInstant="{stamp(now)}" SessionIndex="_session">
       <saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef>
@@ -96,16 +132,18 @@ def assertion(s, request_id, *, subject="stable-123", aid=None, expired=False,
       {xml}</samlp:Response>'''
     if signed:
         response = OneLogin_Saml2_Utils.add_sign(
-            response, signing_key, signing_cert,
+            response,
+            signing_key,
+            signing_cert,
         ).decode()
     return base64.b64encode(response.encode()).decode()
 
 
 def test_multiple_audience_clauses_and_valid_qualifiers(configured):
     encoded = assertion(
-        configured, "_request",
-        restrictions=[["other", configured.saml_sp_entity_id],
-                      [configured.saml_sp_entity_id]],
+        configured,
+        "_request",
+        restrictions=[["other", configured.saml_sp_entity_id], [configured.saml_sp_entity_id]],
         name_qualifier=configured.saml_idp_entity_id,
         sp_name_qualifier=configured.saml_sp_entity_id,
     )
@@ -125,9 +163,11 @@ async def start(client, configured, session, *, popup=True):
 
 async def finish(client, s, flow, **kwargs):
     relay, request_id, cookie = flow
-    return await client.post("/api/auth/saml/acs",
+    return await client.post(
+        "/api/auth/saml/acs",
         data={"SAMLResponse": assertion(s, request_id, **kwargs), "RelayState": relay},
-        headers={"Cookie": f"{s.saml_transaction_cookie_name}={cookie}"})
+        headers={"Cookie": f"{s.saml_transaction_cookie_name}={cookie}"},
+    )
 
 
 async def test_same_window_callback_restores_session(client, configured, session):
@@ -135,15 +175,20 @@ async def test_same_window_callback_restores_session(client, configured, session
     response = await finish(client, configured, flow)
     assert response.headers["location"] == configured.app_base_url + "/?auth=ok"
     token = response.cookies[configured.session_cookie_name]
-    me = await client.get("/api/auth/me", headers={
-        "Cookie": f"{configured.session_cookie_name}={token}",
-    })
+    me = await client.get(
+        "/api/auth/me",
+        headers={
+            "Cookie": f"{configured.session_cookie_name}={token}",
+        },
+    )
     assert me.status_code == 200
     assert me.json()["first_name"] == "Alice"
 
 
 async def test_same_window_failed_callback_returns_error_without_session(
-    client, configured, session,
+    client,
+    configured,
+    session,
 ):
     flow = await start(client, configured, session, popup=False)
     response = await finish(client, configured, flow, expired=True)
@@ -179,15 +224,19 @@ async def test_non_admin_groups_are_display_only_refreshed_and_cleared(client, c
         response = await finish(client, configured, flow, attributes=attributes)
         assert "auth=ok" in response.headers["location"]
         token = response.cookies[configured.session_cookie_name]
-        me = await client.get("/api/auth/me", headers={
-            "Cookie": f"{configured.session_cookie_name}={token}",
-        })
+        me = await client.get(
+            "/api/auth/me",
+            headers={
+                "Cookie": f"{configured.session_cookie_name}={token}",
+            },
+        )
         assert me.status_code == 200
         assert me.json()["is_admin"] is False
         return me.json()["groups"]
 
     assert await login_with_groups([" Developers ", "Admins", "Developers", " "]) == [
-        "Admins", "Developers",
+        "Admins",
+        "Developers",
     ]
     assert await login_with_groups(["Reviewers"]) == ["Reviewers"]
     assert await login_with_groups(None) == []
@@ -195,7 +244,9 @@ async def test_non_admin_groups_are_display_only_refreshed_and_cleared(client, c
     assert user.groups == []
 
 
-async def test_verified_okta_admin_group_grants_and_revokes_app_access(client, configured, session, monkeypatch):
+async def test_verified_okta_admin_group_grants_and_revokes_app_access(
+    client, configured, session, monkeypatch
+):
     # Real locally signed SAML assertions exercise the same provisioning path as Okta.
     for groups, allowed in [
         (["funwithflags-admins"], True),
@@ -205,11 +256,15 @@ async def test_verified_okta_admin_group_grants_and_revokes_app_access(client, c
         ([], False),
     ]:
         response = await finish(
-            client, configured, await start(client, configured, session),
+            client,
+            configured,
+            await start(client, configured, session),
             attributes={"email": ["alice@example.test"], "groups": groups},
         )
         assert "auth=ok" in response.headers["location"]
-        headers = {"Cookie": f"{configured.session_cookie_name}={response.cookies[configured.session_cookie_name]}"}
+        headers = {
+            "Cookie": f"{configured.session_cookie_name}={response.cookies[configured.session_cookie_name]}"
+        }
         me = await client.get("/api/auth/me", headers=headers)
         assert me.json()["is_admin"] is allowed
         for endpoint in ("users", "challenges", "audit", "submissions"):
@@ -222,20 +277,26 @@ async def test_verified_okta_admin_group_grants_and_revokes_app_access(client, c
         assert stored.is_admin is False  # No sticky authority after a later group removal.
 
 
-@pytest.mark.parametrize("changes", [
-    {"signed": False}, {"expired": True}, {"audience": "wrong"},
-    {"issuer": "https://evil.test/entity"}, {"recipient": "https://evil.test/acs"},
-    {"recipient": "https://ui.test/api/auth/saml/acs/evil"},
-    {"attributes": {"email": ["a", "b"]}},
-    {"attributes": {"groups": ["x" * 256]}},
-    {"attributes": {"groups": ["group"] * 201}},
-    {"attributes": {"groups": ["group\nspoofed"]}},
-    {"attributes": {"groups": ["group\u202espoofed"]}},
-    {"restrictions": [["https://ui.test/saml"], ["https://other.test/saml"]]},
-    {"restrictions": []},
-    {"name_qualifier": "https://other.test/entity"},
-    {"sp_name_qualifier": "https://other.test/saml"},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"signed": False},
+        {"expired": True},
+        {"audience": "wrong"},
+        {"issuer": "https://evil.test/entity"},
+        {"recipient": "https://evil.test/acs"},
+        {"recipient": "https://ui.test/api/auth/saml/acs/evil"},
+        {"attributes": {"email": ["a", "b"]}},
+        {"attributes": {"groups": ["x" * 256]}},
+        {"attributes": {"groups": ["group"] * 201}},
+        {"attributes": {"groups": ["group\nspoofed"]}},
+        {"attributes": {"groups": ["group\u202espoofed"]}},
+        {"restrictions": [["https://ui.test/saml"], ["https://other.test/saml"]]},
+        {"restrictions": []},
+        {"name_qualifier": "https://other.test/entity"},
+        {"sp_name_qualifier": "https://other.test/saml"},
+    ],
+)
 async def test_invalid_assertions_create_no_accounts(client, configured, session, changes):
     flow = await start(client, configured, session)
     result = await finish(client, configured, flow, **changes)
@@ -259,8 +320,10 @@ async def test_disabled_and_no_email_link(client, configured, session):
 
 async def test_browser_binding(client, configured, session):
     relay, request_id, _ = await start(client, configured, session)
-    result = await client.post("/api/auth/saml/acs",
-        data={"SAMLResponse": assertion(configured, request_id), "RelayState": relay})
+    result = await client.post(
+        "/api/auth/saml/acs",
+        data={"SAMLResponse": assertion(configured, request_id), "RelayState": relay},
+    )
     assert "auth_error=" in result.headers["location"]
     assert not (await session.execute(select(User))).scalars().all()
 
@@ -315,8 +378,11 @@ async def test_home_roster_is_minimal_active_login_roster(client, configured, se
     assert all(set(entry) == {"home"} for entry in body["entries"])
     serialized = response.text.lower()
     for private_value in (
-        owner.email, owner.okta_sub, owner.department_parent,
-        peer.email, peer.okta_sub,
+        owner.email,
+        owner.okta_sub,
+        owner.department_parent,
+        peer.email,
+        peer.okta_sub,
     ):
         if private_value:
             assert private_value.lower() not in serialized
@@ -330,9 +396,9 @@ async def test_assertion_replay_across_transactions(client, configured, session)
     first = await start(client, configured, session)
     assert "auth=ok" in (await finish(client, configured, first, aid="_same")).headers["location"]
     second = await start(client, configured, session)
-    assert "auth_error=" in (
-        await finish(client, configured, second, aid="_same")
-    ).headers["location"]
+    assert (
+        "auth_error=" in (await finish(client, configured, second, aid="_same")).headers["location"]
+    )
 
 
 async def test_wrong_request_and_tampering(client, configured, session):
@@ -342,9 +408,11 @@ async def test_wrong_request_and_tampering(client, configured, session):
         if tamper:
             xml = base64.b64decode(encoded).replace(b"Alice", b"Mallory")
             encoded = base64.b64encode(xml).decode()
-        result = await client.post("/api/auth/saml/acs",
+        result = await client.post(
+            "/api/auth/saml/acs",
             data={"SAMLResponse": encoded, "RelayState": relay},
-            headers={"Cookie": f"{configured.saml_transaction_cookie_name}={cookie}"})
+            headers={"Cookie": f"{configured.saml_transaction_cookie_name}={cookie}"},
+        )
         assert "auth_error=" in result.headers["location"]
     assert not (await session.execute(select(User))).scalars().all()
 
@@ -359,18 +427,34 @@ async def test_admin_me_logout_and_old_session(client, configured, session):
     assert me.json()["department_parent"] == "Engineering"
     assert (await client.post("/api/auth/logout", headers=headers)).status_code == 204
     user = (await session.execute(select(User))).scalar_one()
-    old = jwt.encode({"aud": "fwf:legacy-session", "sub": str(user.id),
-                      "iat": int(time.time()), "exp": int(time.time())+600},
-                     configured.session_secret.get_secret_value(), algorithm="HS256")
-    assert (await client.get("/api/auth/me", headers={
-        "Cookie": f"{configured.session_cookie_name}={old}",
-    })).status_code == 401
+    old = jwt.encode(
+        {
+            "aud": "fwf:legacy-session",
+            "sub": str(user.id),
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 600,
+        },
+        configured.session_secret.get_secret_value(),
+        algorithm="HS256",
+    )
+    assert (
+        await client.get(
+            "/api/auth/me",
+            headers={
+                "Cookie": f"{configured.session_cookie_name}={old}",
+            },
+        )
+    ).status_code == 401
 
 
 async def test_required_and_metadata(client, configured, session):
     configured.saml_required_attributes = ["level"]
-    result = await finish(client, configured, await start(client, configured, session),
-                          attributes={"email": ["alice@example.test"]})
+    result = await finish(
+        client,
+        configured,
+        await start(client, configured, session),
+        attributes={"email": ["alice@example.test"]},
+    )
     assert "auth_error=" in result.headers["location"]
     assert not (await session.execute(select(User))).scalars().all()
     metadata = await client.get("/api/auth/saml/metadata")
@@ -384,12 +468,19 @@ async def test_repeat_refresh_preserves_score(client, configured, session):
     challenge = await make_challenge(session, configured)
     session.add(Solve(user_id=user.id, challenge_id=challenge.id, points_awarded=100))
     await session.commit()
-    result = await finish(client, configured, await start(client, configured, session),
-                          attributes={"firstname": ["Updated"], "level": ["L6"]})
+    result = await finish(
+        client,
+        configured,
+        await start(client, configured, session),
+        attributes={"firstname": ["Updated"], "level": ["L6"]},
+    )
     token = result.cookies[configured.session_cookie_name]
-    me = await client.get("/api/auth/me", headers={
-        "Cookie": f"{configured.session_cookie_name}={token}",
-    })
+    me = await client.get(
+        "/api/auth/me",
+        headers={
+            "Cookie": f"{configured.session_cookie_name}={token}",
+        },
+    )
     assert me.json()["score"] == 100
     assert me.json()["first_name"] == "Updated"
     assert me.json()["email"] is None
@@ -408,10 +499,14 @@ async def test_expired_transaction_and_unsolicited(client, configured, session):
 
 
 async def test_oversized_and_control_attributes(client, configured, session):
-    for attributes in ({"level": ["x" * 129]}, {"firstname": ["bad\nname"]},
-                       {"firstname": ["Alice", "Other"]}):
-        result = await finish(client, configured, await start(client, configured, session),
-                              attributes=attributes)
+    for attributes in (
+        {"level": ["x" * 129]},
+        {"firstname": ["bad\nname"]},
+        {"firstname": ["Alice", "Other"]},
+    ):
+        result = await finish(
+            client, configured, await start(client, configured, session), attributes=attributes
+        )
         assert "auth_error=" in result.headers["location"]
     assert not (await session.execute(select(User))).scalars().all()
 
@@ -423,16 +518,31 @@ async def test_transaction_consumption_is_atomic(tmp_path):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     async with factory() as db:
-        db.add(SamlTransaction(relay_hash="r", browser_hash="b", request_id="_r", popup=True,
-                               expires_at=datetime.now(UTC) + timedelta(minutes=5)))
+        db.add(
+            SamlTransaction(
+                relay_hash="r",
+                browser_hash="b",
+                request_id="_r",
+                popup=True,
+                expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
         await db.commit()
+
     async def consume():
         async with factory() as db:
-            row = (await db.execute(delete(SamlTransaction).where(
-                SamlTransaction.relay_hash == "r",
-            ).returning(SamlTransaction.request_id))).first()
+            row = (
+                await db.execute(
+                    delete(SamlTransaction)
+                    .where(
+                        SamlTransaction.relay_hash == "r",
+                    )
+                    .returning(SamlTransaction.request_id)
+                )
+            ).first()
             await db.commit()
             return row is not None
+
     try:
         assert sum(await asyncio.gather(consume(), consume())) == 1
     finally:

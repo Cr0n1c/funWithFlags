@@ -85,7 +85,9 @@ async def test_slack_wire_payload_is_plain_and_never_redirects(monkeypatch):
     assert captured["options"]["follow_redirects"] is False
     assert captured["options"]["trust_env"] is False
     assert captured["json"]["blocks"][0]["text"] == {
-        "type": "plain_text", "text": message, "emoji": False,
+        "type": "plain_text",
+        "text": message,
+        "emoji": False,
     }
     assert captured["json"]["unfurl_links"] is False
     assert captured["json"]["text"] == message
@@ -93,14 +95,22 @@ async def test_slack_wire_payload_is_plain_and_never_redirects(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_scoring_committed_once_and_hidden_title_not_sent(
-    client, settings, session, monkeypatch,
+    client,
+    settings,
+    session,
+    monkeypatch,
 ):
     send = enabled(settings, monkeypatch)
     user = await make_user(session, username="private-email")
     user.shell_name = "player-one"
     await session.commit()
     challenge = await make_challenge(
-        session, settings, slug="private-title", flag="SECRET{value}", points=19, hidden=True,
+        session,
+        settings,
+        slug="private-title",
+        flag="SECRET{value}",
+        points=19,
+        hidden=True,
     )
     challenge.title = "SECRET planted answer"
     await session.commit()
@@ -122,7 +132,10 @@ async def test_scoring_committed_once_and_hidden_title_not_sent(
 
 @pytest.mark.asyncio
 async def test_command_only_authenticated_allowlisted_and_throttled(
-    client, settings, session, monkeypatch,
+    client,
+    settings,
+    session,
+    monkeypatch,
 ):
     send = enabled(settings, monkeypatch)
     user = await make_user(session)
@@ -131,9 +144,13 @@ async def test_command_only_authenticated_allowlisted_and_throttled(
     await session.refresh(user)
     url = "/api/activity/command"
     headers = {**session_cookie(settings, user), "Origin": settings.app_base_url}
-    assert (await client.post(
-        url, json={"command": "scoreboard"}, headers=headers,
-    )).status_code == 204
+    assert (
+        await client.post(
+            url,
+            json={"command": "scoreboard"},
+            headers=headers,
+        )
+    ).status_code == 204
     assert send.await_args.args[1] == "player-two ran scoreboard."
     for payload in (
         {"command": "scoreboard", "username": "forged"},
@@ -143,19 +160,31 @@ async def test_command_only_authenticated_allowlisted_and_throttled(
     ):
         assert (await client.post(url, json=payload, headers=headers)).status_code == 422
     assert (await client.post(url, json={"command": "scoreboard"})).status_code == 401
-    assert (await client.post(url, json={"command": "scoreboard"}, headers={
-        **session_cookie(settings, user), "Origin": "https://evil.test",
-    })).status_code == 403
+    assert (
+        await client.post(
+            url,
+            json={"command": "scoreboard"},
+            headers={
+                **session_cookie(settings, user),
+                "Origin": "https://evil.test",
+            },
+        )
+    ).status_code == 403
     for _ in range(15):
-        assert (await client.post(url, json={"command": "shell command"}, headers=headers)
-                ).status_code == 204
+        assert (
+            await client.post(url, json={"command": "shell command"}, headers=headers)
+        ).status_code == 204
     assert send.await_count == 10
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("opt_in", [True, False])
 async def test_verified_login_once_not_profile_refresh(
-    client, saml_settings, session, monkeypatch, opt_in,
+    client,
+    saml_settings,
+    session,
+    monkeypatch,
+    opt_in,
 ):
     configured = saml_settings
     send = enabled(configured, monkeypatch)
@@ -168,9 +197,12 @@ async def test_verified_login_once_not_profile_refresh(
         assert send.await_args.args[1].endswith(" logged into Fun With Flags.")
         assert "alice@example.test" not in send.await_args.args[1]
     token = response.cookies[configured.session_cookie_name]
-    await client.get("/api/auth/me", headers={
-        "Cookie": f"{configured.session_cookie_name}={token}",
-    })
+    await client.get(
+        "/api/auth/me",
+        headers={
+            "Cookie": f"{configured.session_cookie_name}={token}",
+        },
+    )
     assert send.await_count == int(opt_in)
     assert (await finish(client, configured, flow)).status_code == 303
     assert send.await_count == int(opt_in)
@@ -178,14 +210,21 @@ async def test_verified_login_once_not_profile_refresh(
 
 @pytest.mark.asyncio
 async def test_delivery_retry_after_commit_and_missing_schema_fail_open(
-    client, settings, session, database, monkeypatch,
+    client,
+    settings,
+    session,
+    database,
+    monkeypatch,
 ):
     send = enabled(settings, monkeypatch)
     send.return_value = False
     user = await make_user(session)
     await make_challenge(session, settings, flag="real-flag", points=9)
-    response = await client.post("/api/challenges/warmup/submit",
-                                 json={"flag": "real-flag"}, headers=session_cookie(settings, user))
+    response = await client.post(
+        "/api/challenges/warmup/submit",
+        json={"flag": "real-flag"},
+        headers=session_cookie(settings, user),
+    )
     assert response.json()["points_awarded"] == 9
     row = (await session.execute(select(ActivityOutbox))).scalar_one()
     assert row.attempts == 1 and row.delivered_at is None
@@ -203,7 +242,8 @@ async def test_delivery_retry_after_commit_and_missing_schema_fail_open(
     other = await make_challenge(session, settings, slug="second", flag="another")
     assert other.id
     result = await client.post(
-        "/api/challenges/second/submit", json={"flag": "another"},
+        "/api/challenges/second/submit",
+        json={"flag": "another"},
         headers=session_cookie(settings, user),
     )
     assert result.status_code == 200 and result.json()["points_awarded"] > 0
@@ -214,8 +254,10 @@ async def test_delivery_retry_after_commit_and_missing_schema_fail_open(
 async def test_startup_never_sends_even_with_fake_webhook(settings, database, monkeypatch):
     monkeypatch.setenv("SLACK_ACTIVITY_WEBHOOK_URL", WEBHOOK)
     settings = Settings()
+
     def no_network(*args, **kwargs):
         raise AssertionError("startup must not make Slack network requests")
+
     monkeypatch.setattr(httpx.AsyncClient, "post", no_network)
     monkeypatch.setattr(socket.socket, "connect", no_network)
     app = create_app(settings, database=database)

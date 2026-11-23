@@ -40,28 +40,30 @@ async def test_mail_feed_bootstrap_pagination_and_account_isolation(client, sett
     ah = session_cookie(settings, alice)
     bh = session_cookie(settings, bob)
     old = await client.post("/api/challenges/submit", json={"flag": "bad"}, headers=ah)
-    bootstrap = (await client.get(
-        "/api/challenges/notifications?initialize=true", headers=ah
-    )).json()
+    bootstrap = (
+        await client.get("/api/challenges/notifications?initialize=true", headers=ah)
+    ).json()
     assert bootstrap["gold"] == []
     assert bootstrap["gold_cursor"] == old.json()["event_id"]
-    assert (await client.get(
-        "/api/challenges/notifications", headers=bh
-    )).json()["gold"] == []
+    assert (await client.get("/api/challenges/notifications", headers=bh)).json()["gold"] == []
     wrong = await client.post("/api/challenges/submit", json={"flag": "bad2"}, headers=ah)
-    correct = await client.post(
-        "/api/challenges/submit", json={"flag": "secret-flag"}, headers=ah
-    )
-    page = (await client.get(
-        "/api/challenges/notifications",
-        params={"gold_after": bootstrap["gold_cursor"], "limit": 1}, headers=ah,
-    )).json()
+    correct = await client.post("/api/challenges/submit", json={"flag": "secret-flag"}, headers=ah)
+    page = (
+        await client.get(
+            "/api/challenges/notifications",
+            params={"gold_after": bootstrap["gold_cursor"], "limit": 1},
+            headers=ah,
+        )
+    ).json()
     assert page["gold_more"] is True
     assert page["gold"][0]["id"] == wrong.json()["event_id"]
-    following = (await client.get(
-        "/api/challenges/notifications",
-        params={"gold_after": page["gold_cursor"], "limit": 1}, headers=ah,
-    )).json()
+    following = (
+        await client.get(
+            "/api/challenges/notifications",
+            params={"gold_after": page["gold_cursor"], "limit": 1},
+            headers=ah,
+        )
+    ).json()
     assert following["gold_more"] is False
     assert following["gold"][0]["id"] == correct.json()["event_id"]
     assert following["gold"][0]["outcome"] == "correct"
@@ -106,7 +108,6 @@ async def test_id_details_auth_active_hidden_and_unique_solves(client, settings,
     assert second_detail.json()["solved"] is True
 
 
-
 async def test_list_and_submit_flow(client, settings, session):
     user = await make_user(session)
     await make_challenge(session, settings, slug="warmup", flag="xsecurity{Hi}", points=100)
@@ -144,11 +145,15 @@ async def test_list_and_submit_flow(client, settings, session):
         headers=headers,
     )
     assert private.status_code == 200
-    assert private.json()["gold"] == [{
-        "id": right.json()["event_id"], "outcome": "correct",
-        "points": 100, "challenge_id": listing.json()[0]["id"],
-        "time": private.json()["gold"][0]["time"],
-    }]
+    assert private.json()["gold"] == [
+        {
+            "id": right.json()["event_id"],
+            "outcome": "correct",
+            "points": 100,
+            "challenge_id": listing.json()[0]["id"],
+            "time": private.json()["gold"][0]["time"],
+        }
+    ]
     assert "XSECURITY" not in str(private.json())
 
     again = await client.post(
@@ -157,10 +162,13 @@ async def test_list_and_submit_flow(client, settings, session):
     assert again.json()["already_solved"] is True
     assert again.json()["points_awarded"] == 0
     assert again.json()["total_score"] == 100
-    page = (await client.get(
-        "/api/challenges/notifications", params={"gold_after": right.json()["event_id"]},
-        headers=headers,
-    )).json()
+    page = (
+        await client.get(
+            "/api/challenges/notifications",
+            params={"gold_after": right.json()["event_id"]},
+            headers=headers,
+        )
+    ).json()
     assert [event["outcome"] for event in page["gold"]] == ["already_solved"]
 
     detail = await client.get("/api/challenges/warmup", headers=headers)
@@ -344,9 +352,7 @@ async def test_unknown_and_ambiguous_flags_are_generic_counted_and_never_awarded
     assert all(submission.correct is False for submission in submissions)
 
 
-async def test_flag_only_submission_does_not_persist_or_emit_plaintext(
-    client, settings, session
-):
+async def test_flag_only_submission_does_not_persist_or_emit_plaintext(client, settings, session):
     plaintext = "ctf{never-store-or-log-me}"
     user = await make_user(session, username="no-leak")
     challenge = await make_challenge(session, settings, slug="no-leak", flag=plaintext)
@@ -429,9 +435,9 @@ async def test_failed_attempts_count_persisted_outcomes_without_changing_rank(
         return await client.post(path, json={"flag": flag}, headers=headers)
 
     # Anonymous, invalid and missing routes do not persist an adjudicated attempt.
-    assert (await client.post(
-        "/api/challenges/submit", json={"flag": "no-session"}
-    )).status_code == 401
+    assert (
+        await client.post("/api/challenges/submit", json={"flag": "no-session"})
+    ).status_code == 401
     assert (await submit("/api/challenges/missing/submit", "wrong")).status_code == 404
     assert (await submit("/api/challenges/submit", "")).status_code == 422
 
@@ -445,17 +451,18 @@ async def test_failed_attempts_count_persisted_outcomes_without_changing_rank(
     assert (await submit("/api/challenges/attempt-one/submit", "valid-one")).json()["correct"]
     repeat = await submit("/api/challenges/submit", "valid-one")
     assert repeat.json()["correct"] and repeat.json()["already_solved"]
-    assert (await submit(
-        "/api/challenges/attempt-one/submit", "wrong-after-solve"
-    )).json()["correct"] is False
+    assert (await submit("/api/challenges/attempt-one/submit", "wrong-after-solve")).json()[
+        "correct"
+    ] is False
     assert (await submit("/api/challenges/submit", "rate-limited")).status_code == 429
-    assert (await submit(
-        "/api/challenges/attempt-two/submit", "valid-two", other_headers
-    )).json()["correct"]
+    assert (await submit("/api/challenges/attempt-two/submit", "valid-two", other_headers)).json()[
+        "correct"
+    ]
 
     board = (await client.get("/api/leaderboard", headers=player_headers)).json()
-    assert [(row["username"], row["score"], row["solves"], row["failed_attempts"])
-            for row in board] == [
+    assert [
+        (row["username"], row["score"], row["solves"], row["failed_attempts"]) for row in board
+    ] == [
         ("attempt-other", 100, 1, 0),
         ("attempt-player", 100, 1, 3),
     ]
@@ -467,16 +474,16 @@ async def test_failed_attempts_count_persisted_outcomes_without_changing_rank(
     assert mine["entry"]["rank"] == next(
         row["rank"] for row in board if row["username"] == "attempt-player"
     )
-    assert (await client.get("/api/leaderboard/me", headers=other_headers)).json()[
-        "entry"
-    ]["failed_attempts"] == 0
+    assert (await client.get("/api/leaderboard/me", headers=other_headers)).json()["entry"][
+        "failed_attempts"
+    ] == 0
 
     # Historical wrong attempts also appear for a user who has never solved anything.
     unsolved = await make_user(session, username="attempt-unsolved")
     unsolved_headers = session_cookie(settings, unsolved)
-    assert (await submit(
-        "/api/challenges/submit", "wrong-4", unsolved_headers
-    )).json()["correct"] is False
+    assert (await submit("/api/challenges/submit", "wrong-4", unsolved_headers)).json()[
+        "correct"
+    ] is False
     unranked = (await client.get("/api/leaderboard/me", headers=unsolved_headers)).json()
     assert unranked["entry"]["rank"] is None
     assert unranked["entry"]["failed_attempts"] == 1
@@ -533,9 +540,7 @@ async def test_leaderboard_ties_are_stably_ranked(client, settings, session):
         )
         assert response.json()["correct"] is True
 
-    board = (
-        await client.get("/api/leaderboard", headers=session_cookie(settings, second))
-    ).json()
+    board = (await client.get("/api/leaderboard", headers=session_cookie(settings, second))).json()
     assert [(entry["rank"], entry["username"], entry["score"]) for entry in board] == [
         (1, "first", 100),
         (2, "second", 100),
@@ -565,9 +570,7 @@ async def test_group_scoring_uses_first_solve_memberships(client, settings, sess
 
     # A different user still earns their personal solve, while Shared remains credited once.
     assert (
-        await client.post(
-            "/api/challenges/first/submit", json={"flag": "f1"}, headers=bob_headers
-        )
+        await client.post("/api/challenges/first/submit", json={"flag": "f1"}, headers=bob_headers)
     ).json()["points_awarded"] == 100
 
     # No memberships creates no credit, and changing memberships after a solve cannot add one.
@@ -588,9 +591,7 @@ async def test_group_scoring_uses_first_solve_memberships(client, settings, sess
 
     # Multiple challenges sum frozen challenge points for memberships at each first solve.
     assert (
-        await client.post(
-            "/api/challenges/second/submit", json={"flag": "f2"}, headers=bob_headers
-        )
+        await client.post("/api/challenges/second/submit", json={"flag": "f2"}, headers=bob_headers)
     ).json()["points_awarded"] == 250
 
     credits = (await session.execute(select(GroupChallengeCredit))).scalars().all()
@@ -609,8 +610,7 @@ async def test_group_scoring_uses_first_solve_memberships(client, settings, sess
     assert board_response.status_code == 200
     board = board_response.json()
     ranking = [
-        (entry["rank"], entry["group_name"], entry["score"], entry["solves"])
-        for entry in board
+        (entry["rank"], entry["group_name"], entry["score"], entry["solves"]) for entry in board
     ]
     assert ranking == [
         (1, "Bravo", 350, 2),

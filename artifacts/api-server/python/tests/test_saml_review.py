@@ -1,4 +1,5 @@
 """Regression coverage for transport configuration and reviewed identity migration."""
+
 import json
 
 import pytest
@@ -12,11 +13,14 @@ from app.models import AuditLog, Solve, User
 from tests.conftest import make_challenge
 
 
-@pytest.mark.parametrize("overrides", [
-    {"app_base_url": "http://ui.test", "session_cookie_secure": True},
-    {"app_base_url": "https://ui.test", "session_cookie_secure": False},
-    {"app_base_url": "https://", "session_cookie_secure": True},
-])
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"app_base_url": "http://ui.test", "session_cookie_secure": True},
+        {"app_base_url": "https://ui.test", "session_cookie_secure": False},
+        {"app_base_url": "https://", "session_cookie_secure": True},
+    ],
+)
 def test_production_transport_fails_closed(settings, overrides):
     values = settings.model_dump() | {"environment": "production"} | overrides
     with pytest.raises(ValidationError):
@@ -24,18 +28,27 @@ def test_production_transport_fails_closed(settings, overrides):
 
 
 def test_production_https_secure_allowed(settings):
-    result = Settings(**(settings.model_dump() | {
-        "environment": "production", "app_base_url": "https://ui.test",
-        "session_cookie_secure": True,
-    }))
+    result = Settings(
+        **(
+            settings.model_dump()
+            | {
+                "environment": "production",
+                "app_base_url": "https://ui.test",
+                "session_cookie_secure": True,
+            }
+        )
+    )
     assert result.session_cookie_secure
 
 
 @pytest.mark.parametrize("case", ["success", "conflict", "relink", "stale"])
 async def test_reviewed_link_atomicity(case, settings, database, session, monkeypatch, tmp_path):
     settings.saml_idp_entity_id = "https://idp.test/entity"
-    previous = (saml.subject_key(settings.saml_idp_entity_id, "old")
-                if case == "relink" else "legacy:legacy")
+    previous = (
+        saml.subject_key(settings.saml_idp_entity_id, "old")
+        if case == "relink"
+        else "legacy:legacy"
+    )
     user = User(okta_sub=previous, username="legacy", is_admin=True)
     session.add(user)
     await session.commit()
@@ -46,10 +59,17 @@ async def test_reviewed_link_atomicity(case, settings, database, session, monkey
         session.add(User(okta_sub=target, username="already-linked"))
     await session.commit()
     path = tmp_path / "mapping.json"
-    path.write_text(json.dumps({
-        "user_id": user.id, "previous_subject": "wrong" if case == "stale" else previous,
-        "issuer": settings.saml_idp_entity_id, "subject": "new", "approval": "review-123",
-    }))
+    path.write_text(
+        json.dumps(
+            {
+                "user_id": user.id,
+                "previous_subject": "wrong" if case == "stale" else previous,
+                "issuer": settings.saml_idp_entity_id,
+                "subject": "new",
+                "approval": "review-123",
+            }
+        )
+    )
     monkeypatch.setattr(cli, "get_settings", lambda: settings)
     monkeypatch.setattr(cli, "Database", lambda _: database)
 

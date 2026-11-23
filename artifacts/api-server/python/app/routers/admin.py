@@ -18,6 +18,7 @@ from app.models import (
     Submission,
     User,
 )
+from app.routers.leaderboard import combined_rankings
 from app.schemas import (
     AdminChallengeOut,
     AdminUserOut,
@@ -33,8 +34,8 @@ from app.security import (
     SettingsDep,
     acquire_flag_mutation_lock,
     client_ip,
-    hash_flag,
     has_app_admin_access,
+    hash_flag,
     verify_flag,
 )
 from app.seed import SLUG_RE
@@ -45,7 +46,10 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.post("/user-points/import", response_model=UserPointsResult)
 async def award_user_points(
-    body: UserPointsImport, response: Response, admin: FlagAdminUser, db: DbDep,
+    body: UserPointsImport,
+    response: Response,
+    admin: FlagAdminUser,
+    db: DbDep,
 ):
     response.headers["Cache-Control"] = "private, no-store"
     result = await import_user_points(db, admin.id, body)
@@ -67,8 +71,6 @@ class UserStatsOut(BaseModel):
 @router.get("/user-stats", response_model=UserStatsOut)
 async def user_stats(_admin: AdminUser, db: DbDep):
     """Aggregate stored activity and awards; never trigger scoring."""
-    from app.routers.leaderboard import combined_rankings
-
     end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     start = end - timedelta(days=30)
     # Explicit UTC conversion on PostgreSQL, independent of the DB session timezone.
@@ -79,23 +81,25 @@ async def user_stats(_admin: AdminUser, db: DbDep):
         select(func.count(func.distinct(AuditLog.user_id)).label("people"))
         .where(
             AuditLog.event_type == "saml.login",
-            AuditLog.created_at >= start, AuditLog.created_at < end,
+            AuditLog.created_at >= start,
+            AuditLog.created_at < end,
             AuditLog.user_id.is_not(None),
         )
-        .group_by(func.date(timestamp)).subquery()
+        .group_by(func.date(timestamp))
+        .subquery()
     )
     total_user_days = await db.scalar(select(func.coalesce(func.sum(daily.c.people), 0)))
-    logged_in = await db.scalar(
-        select(func.count(User.id)).where(User.last_login_at.is_not(None))
-    )
+    logged_in = await db.scalar(select(func.count(User.id)).where(User.last_login_at.is_not(None)))
     # Statistics include competition opt-outs; hiding a rank is not removing a user.
     rankings = await combined_rankings(db)
     return UserStatsOut(
         people_logged_in=int(logged_in or 0),
         people_with_points=sum(row.score > 0 for _, row in rankings),
         average_daily_logins=round(float(total_user_days or 0) / 30, 2),
-        window_days=30, window_start=start.date().isoformat(),
-        window_end=(end - timedelta(days=1)).date().isoformat(), timezone="UTC",
+        window_days=30,
+        window_start=start.date().isoformat(),
+        window_end=(end - timedelta(days=1)).date().isoformat(),
+        timezone="UTC",
     )
 
 
@@ -106,6 +110,7 @@ def _audit(db: DbDep, request: Request, admin: User, event: str, **detail: objec
     db.add(
         AuditLog(user_id=admin.id, event_type=event, detail=detail, ip_address=client_ip(request))
     )
+
 
 @router.get("/challenges", response_model=list[AdminChallengeOut])
 async def list_challenges(admin: AdminUser, db: DbDep) -> list[AdminChallengeOut]:
@@ -189,22 +194,26 @@ async def upsert_challenge(
 
 
 @router.delete("/challenges/{slug}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_challenge(
-    slug: str, request: Request, admin: FlagAdminUser, db: DbDep
-) -> None:
+async def delete_challenge(slug: str, request: Request, admin: FlagAdminUser, db: DbDep) -> None:
     challenge = (
         await db.execute(select(Challenge).where(Challenge.slug == slug))
     ).scalar_one_or_none()
     if challenge is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")
-    users = set((await db.execute(
-        select(Solve.user_id).where(Solve.challenge_id == challenge.id)
-    )).scalars())
-    groups = set((await db.execute(
-        select(GroupChallengeCredit.group_name).where(
-            GroupChallengeCredit.challenge_id == challenge.id,
-        )
-    )).scalars())
+    users = set(
+        (
+            await db.execute(select(Solve.user_id).where(Solve.challenge_id == challenge.id))
+        ).scalars()
+    )
+    groups = set(
+        (
+            await db.execute(
+                select(GroupChallengeCredit.group_name).where(
+                    GroupChallengeCredit.challenge_id == challenge.id,
+                )
+            )
+        ).scalars()
+    )
     await db.delete(challenge)
     await db.flush()
     await refresh_affected(db, users, groups)

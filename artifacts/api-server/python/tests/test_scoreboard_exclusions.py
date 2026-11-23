@@ -20,15 +20,19 @@ async def test_owner_exclusion_preserves_progress_and_other_admins(client, setti
     owner = await make_user(session, username="operator", is_admin=True)
     participant = await make_user(session, username="participant", is_admin=True)
     owner.full_name = participant.full_name = "Same Display Name"
-    yesterday = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    yesterday = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+        days=1
+    )
     owner.last_login_at = participant.last_login_at = yesterday
     challenge = await make_challenge(session, settings, category="gold", points=500)
-    session.add_all([
-        AuditLog(user_id=owner.id, event_type="saml.login", created_at=yesterday),
-        AuditLog(user_id=participant.id, event_type="saml.login", created_at=yesterday),
-        Solve(user_id=owner.id, challenge_id=challenge.id, points_awarded=500),
-        Solve(user_id=participant.id, challenge_id=challenge.id, points_awarded=100),
-    ])
+    session.add_all(
+        [
+            AuditLog(user_id=owner.id, event_type="saml.login", created_at=yesterday),
+            AuditLog(user_id=participant.id, event_type="saml.login", created_at=yesterday),
+            Solve(user_id=owner.id, challenge_id=challenge.id, points_awarded=500),
+            Solve(user_id=participant.id, challenge_id=challenge.id, points_awarded=100),
+        ]
+    )
     await session.flush()
     await refresh_affected(session, {owner.id, participant.id}, set())
     await session.commit()
@@ -42,7 +46,9 @@ async def test_owner_exclusion_preserves_progress_and_other_admins(client, setti
     visible = (await client.get("/api/leaderboard/me", headers=headers)).json()
     assert visible["total_players"] == 1
     assert visible["entry"]["rank"] == 1
-    private = (await client.get("/api/leaderboard/me", headers=session_cookie(settings, owner))).json()
+    private = (
+        await client.get("/api/leaderboard/me", headers=session_cookie(settings, owner))
+    ).json()
     assert private["entry"]["rank"] is None
     assert private["entry"]["score"] == 500
     assert private["entry"]["solves"] == 1

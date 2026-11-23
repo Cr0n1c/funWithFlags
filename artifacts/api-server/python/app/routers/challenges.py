@@ -38,7 +38,8 @@ log = get_logger(__name__)
 
 @router.get("/notifications", summary="Private committed scoring events")
 async def scoring_notifications(
-    user: CurrentUser, db: DbDep,
+    user: CurrentUser,
+    db: DbDep,
     gold_after: int = Query(default=0, ge=0),
     initialize: bool = False,
     limit: int = Query(default=50, ge=1, le=100),
@@ -50,39 +51,57 @@ async def scoring_notifications(
     """
     user_id = user.id
     if initialize:
-        latest_gold = (await db.execute(
-            select(func.coalesce(func.max(AuditLog.id), 0)).where(
-                AuditLog.user_id == user_id,
-                AuditLog.event_type.in_(("flag_correct", "flag_incorrect")),
+        latest_gold = (
+            await db.execute(
+                select(func.coalesce(func.max(AuditLog.id), 0)).where(
+                    AuditLog.user_id == user_id,
+                    AuditLog.event_type.in_(("flag_correct", "flag_incorrect")),
+                )
             )
-        )).scalar_one()
+        ).scalar_one()
         return {"gold_cursor": latest_gold, "gold": [], "gold_more": False}
-    gold_rows = (await db.execute(
-        select(AuditLog).where(
-            AuditLog.user_id == user_id,
-            AuditLog.event_type.in_(("flag_correct", "flag_incorrect")),
-            AuditLog.id > gold_after,
-        ).order_by(AuditLog.id).limit(limit + 1)
-    )).scalars().all()
+    gold_rows = (
+        (
+            await db.execute(
+                select(AuditLog)
+                .where(
+                    AuditLog.user_id == user_id,
+                    AuditLog.event_type.in_(("flag_correct", "flag_incorrect")),
+                    AuditLog.id > gold_after,
+                )
+                .order_by(AuditLog.id)
+                .limit(limit + 1)
+            )
+        )
+        .scalars()
+        .all()
+    )
     gold_events = []
     for row in gold_rows[:limit]:
         detail = row.detail if isinstance(row.detail, dict) else {}
         slug = detail.get("challenge")
-        challenge = (await db.execute(
-            select(Challenge).where(Challenge.slug == slug)
-        )).scalar_one_or_none() if isinstance(slug, str) else None
+        challenge = (
+            (await db.execute(select(Challenge).where(Challenge.slug == slug))).scalar_one_or_none()
+            if isinstance(slug, str)
+            else None
+        )
         points = detail.get("points")
-        gold_events.append({
-            "id": row.id, "outcome": "incorrect" if row.event_type == "flag_incorrect"
-            else "already_solved" if detail.get("already_solved") is True
-            or ("already_solved" not in detail and (not isinstance(points, int) or points <= 0))
-            else "correct",
-            "points": points if isinstance(points, int) and points >= 0 else 0,
-            "time": row.created_at.isoformat(),
-            # Only a numeric ID: titles, slugs and categories can themselves
-            # contain the submitted flag and must not enter mail payloads.
-            "challenge_id": challenge.id if challenge else None,
-        })
+        gold_events.append(
+            {
+                "id": row.id,
+                "outcome": "incorrect"
+                if row.event_type == "flag_incorrect"
+                else "already_solved"
+                if detail.get("already_solved") is True
+                or ("already_solved" not in detail and (not isinstance(points, int) or points <= 0))
+                else "correct",
+                "points": points if isinstance(points, int) and points >= 0 else 0,
+                "time": row.created_at.isoformat(),
+                # Only a numeric ID: titles, slugs and categories can themselves
+                # contain the submitted flag and must not enter mail payloads.
+                "challenge_id": challenge.id if challenge else None,
+            }
+        )
     return {
         "gold_cursor": gold_events[-1]["id"] if gold_events else gold_after,
         "gold_more": len(gold_rows) > limit,
@@ -119,21 +138,24 @@ def _to_out(c: Challenge, solved: set[int], counts: dict[int, int]) -> Challenge
 
 
 @router.get(
-    "/matrix/status", response_model=MatrixCompletionOut,
+    "/matrix/status",
+    response_model=MatrixCompletionOut,
     summary="Current player's Matrix completion",
 )
 async def matrix_completion(user: CurrentUser, db: DbDep) -> MatrixCompletionOut:
     """Read only the authenticated player's committed solve."""
-    solved = await db.scalar(select(
-        select(Solve.id)
-        .join(Challenge, Challenge.id == Solve.challenge_id)
-        .where(
-            Solve.user_id == user.id,
-            Challenge.slug == "enter-the-matrix",
-            Challenge.is_active.is_(True),
+    solved = await db.scalar(
+        select(
+            select(Solve.id)
+            .join(Challenge, Challenge.id == Solve.challenge_id)
+            .where(
+                Solve.user_id == user.id,
+                Challenge.slug == "enter-the-matrix",
+                Challenge.is_active.is_(True),
+            )
+            .exists()
         )
-        .exists()
-    ))
+    )
     return MatrixCompletionOut(solved=bool(solved))
 
 
@@ -192,11 +214,7 @@ async def _resolve_active_flag(
 ) -> Challenge | None:
     """Return the sole active match; unknown and ambiguous flags resolve to nothing."""
     challenges = (
-        (
-            await db.execute(select(Challenge).where(Challenge.is_active.is_(True)))
-        )
-        .scalars()
-        .all()
+        (await db.execute(select(Challenge).where(Challenge.is_active.is_(True)))).scalars().all()
     )
     matches = [
         challenge
@@ -226,9 +244,7 @@ async def _award_submission(  # noqa: PLR0912
             raise RuntimeError("A correct submission must have a resolved challenge")
         already = (
             await db.execute(
-                select(Solve.id).where(
-                    Solve.user_id == user.id, Solve.challenge_id == challenge.id
-                )
+                select(Solve.id).where(Solve.user_id == user.id, Solve.challenge_id == challenge.id)
             )
         ).scalar_one_or_none() is not None
 
@@ -297,24 +313,27 @@ async def _award_submission(  # noqa: PLR0912
 
     challenge_slug = challenge.slug if challenge is not None else None
     audit = AuditLog(
-            user_id=user.id,
-            event_type="flag_correct" if correct else "flag_incorrect",
-            detail={"challenge": challenge_slug, "points": points_awarded,
-                    "already_solved": already},
-            ip_address=client_ip(request),
-        )
+        user_id=user.id,
+        event_type="flag_correct" if correct else "flag_incorrect",
+        detail={"challenge": challenge_slug, "points": points_awarded, "already_solved": already},
+        ip_address=client_ip(request),
+    )
     db.add(audit)
     await db.flush()
     settings = request.app.state.settings
     if points_awarded > 0 and challenge is not None:
         await enqueue(
-            db, settings, f"flag:{solve.id}",
-            score_message(user, points_awarded,
-                          "challenge" if challenge.hidden else challenge.title),
+            db,
+            settings,
+            f"flag:{solve.id}",
+            score_message(
+                user, points_awarded, "challenge" if challenge.hidden else challenge.title
+            ),
         )
     # Attempt count and any newly credited immutable groups commit with the ledgers.
     await refresh_affected(
-        db, {user.id},
+        db,
+        {user.id},
         set(group_names) if points_awarded > 0 else set(),
     )
     await db.commit()

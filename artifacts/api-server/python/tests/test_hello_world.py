@@ -17,7 +17,12 @@ async def _catalog_without_intro(session, settings):
             continue
         category, points = metadata(slug)
         row = await make_challenge(
-            session, settings, slug=slug, flag=flag, category=category, points=points,
+            session,
+            settings,
+            slug=slug,
+            flag=flag,
+            category=category,
+            points=points,
         )
         row.title, row.description = title, description
     await session.commit()
@@ -35,7 +40,10 @@ async def _awards(session):
 
 
 async def test_hello_world_explicit_import_and_normal_scoring(
-    monkeypatch, client, settings, session,
+    monkeypatch,
+    client,
+    settings,
+    session,
 ):
     monkeypatch.setattr(crack_hashes, "PUZZLES", ())
     await _catalog_without_intro(session, settings)
@@ -47,9 +55,13 @@ async def test_hello_world_explicit_import_and_normal_scoring(
     endpoint = "/api/flag-admin/import-challenges"
     payload = {"terminal_missing": ["hello-world"]}
     await make_challenge(session, settings, slug="unrelated", flag="other", points=37)
-    assert (await client.post(
-        "/api/challenges/submit", json={"flag": "other"}, headers=ah,
-    )).json()["points_awarded"] == 37
+    assert (
+        await client.post(
+            "/api/challenges/submit",
+            json={"flag": "other"},
+            headers=ah,
+        )
+    ).json()["points_awarded"] == 37
     awards_before = await _awards(session)
 
     assert (await client.get(endpoint)).status_code == 401
@@ -58,9 +70,17 @@ async def test_hello_world_explicit_import_and_normal_scoring(
     assert (await client.post(endpoint, json=payload, headers=ah)).status_code == 403
     preview = await client.get(endpoint, headers=admin)
     assert preview.status_code == 200
-    assert preview.json() == {"puzzles": [], "terminal": [{
-        "slug": "hello-world", "title": "Hello World", "points": 5, "missing": True,
-    }]}
+    assert preview.json() == {
+        "puzzles": [],
+        "terminal": [
+            {
+                "slug": "hello-world",
+                "title": "Hello World",
+                "points": 5,
+                "missing": True,
+            }
+        ],
+    }
     assert "hello_world" not in preview.text
     assert await session.scalar(select(Challenge).where(Challenge.slug == "hello-world")) is None
     imported = await client.post(endpoint, json=payload, headers=admin)
@@ -74,12 +94,17 @@ async def test_hello_world_explicit_import_and_normal_scoring(
     assert row.is_active and not row.hidden and not row.case_sensitive
     identity = (row.id, row.flag_hash, row.updated_at)
 
-    assert (await client.post(
-        "/api/challenges/submit", json={"flag": "hello_world"},
-    )).status_code == 401
+    assert (
+        await client.post(
+            "/api/challenges/submit",
+            json={"flag": "hello_world"},
+        )
+    ).status_code == 401
     for headers, total in ((ah, 42), (bh, 5)):
         first = await client.post(
-            "/api/challenges/submit", json={"flag": "hello_world"}, headers=headers,
+            "/api/challenges/submit",
+            json={"flag": "hello_world"},
+            headers=headers,
         )
         assert first.status_code == 200
         assert first.json()["correct"] is True
@@ -87,15 +112,19 @@ async def test_hello_world_explicit_import_and_normal_scoring(
         assert first.json()["points_awarded"] == 5
         assert first.json()["total_score"] == total
         repeat = await client.post(
-            "/api/challenges/submit", json={"flag": "hello_world"}, headers=headers,
+            "/api/challenges/submit",
+            json={"flag": "hello_world"},
+            headers=headers,
         )
         assert repeat.json()["already_solved"] is True
         assert repeat.json()["points_awarded"] == 0
         assert repeat.json()["total_score"] == total
     solves = (await session.scalars(select(Solve).where(Solve.challenge_id == row.id))).all()
-    credits = (await session.scalars(
-        select(GroupChallengeCredit).where(GroupChallengeCredit.challenge_id == row.id)
-    )).all()
+    credits = (
+        await session.scalars(
+            select(GroupChallengeCredit).where(GroupChallengeCredit.challenge_id == row.id)
+        )
+    ).all()
     assert {(s.user_id, s.points_awarded) for s in solves} == {(alice.id, 5), (bob.id, 5)}
     assert [(c.group_name, c.points_awarded) for c in credits] == [("Shared", 5)]
     board = (await client.get("/api/leaderboard", headers=ah)).json()
@@ -113,17 +142,26 @@ async def test_hello_world_explicit_import_and_normal_scoring(
     assert await _awards(session) == awards_after
     await session.refresh(row)
     assert (row.id, row.flag_hash, row.updated_at) == identity
-    assert len((await session.scalars(
-        select(Challenge).where(Challenge.slug == "hello-world")
-    )).all()) == 1
+    assert (
+        len((await session.scalars(select(Challenge).where(Challenge.slug == "hello-world"))).all())
+        == 1
+    )
 
 
-@pytest.mark.parametrize("slug,flag", [
-    ("hello-world", "different-answer"),
-    ("unrelated-collision", "hello_world"),
-])
+@pytest.mark.parametrize(
+    "slug,flag",
+    [
+        ("hello-world", "different-answer"),
+        ("unrelated-collision", "hello_world"),
+    ],
+)
 async def test_hello_world_conflict_aborts_entire_import(
-    monkeypatch, client, settings, session, slug, flag,
+    monkeypatch,
+    client,
+    settings,
+    session,
+    slug,
+    flag,
 ):
     monkeypatch.setattr(crack_hashes, "PUZZLES", ())
     operator = await _member(session)
@@ -131,9 +169,13 @@ async def test_hello_world_conflict_aborts_entire_import(
     endpoint = "/api/flag-admin/import-challenges"
     preview = (await client.get(endpoint, headers=headers)).json()
     existing = await make_challenge(session, settings, slug=slug, flag=flag, points=123)
-    response = await client.post(endpoint, headers=headers, json={
-        "terminal_missing": [p["slug"] for p in preview["terminal"]],
-    })
+    response = await client.post(
+        endpoint,
+        headers=headers,
+        json={
+            "terminal_missing": [p["slug"] for p in preview["terminal"]],
+        },
+    )
     assert response.status_code == 409
     session.expire_all()
     rows = (await session.scalars(select(Challenge))).all()

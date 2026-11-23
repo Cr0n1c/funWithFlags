@@ -18,10 +18,18 @@ from app.config import Settings, get_settings
 from app.crack_hashes import normalize_hash_categories
 from app.db import Database
 from app.logging import configure_logging, get_logger
-from app.routers import activity, admin, auth, challenges, flag_admin, health, leaderboard
-from app.routers import command_catalog
-from app.routers import training
-from app.routers import public_curl
+from app.routers import (
+    activity,
+    admin,
+    auth,
+    challenges,
+    command_catalog,
+    flag_admin,
+    health,
+    leaderboard,
+    public_curl,
+    training,
+)
 from app.scoreboard_projection import initialize_missing
 from app.seed import load_seed_file, upsert_challenges
 
@@ -86,15 +94,11 @@ def create_app(
     )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_error(
-        request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         if request.url.path == "/api/flag-admin/import-challenges":
             # Unknown JSON keys may be attacker-controlled secrets too (the
             # default Pydantic location can reflect them even without input).
-            return JSONResponse(
-                {"detail": "Invalid challenge import request"}, status_code=422
-            )
+            return JSONResponse({"detail": "Invalid challenge import request"}, status_code=422)
         # Pydantic's default response includes the rejected input. Flag plaintext
         # must never be reflected in validation output.
         errors = [

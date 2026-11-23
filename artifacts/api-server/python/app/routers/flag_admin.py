@@ -94,10 +94,7 @@ def _backup_key_id(settings: SettingsDep) -> str:
 
 
 def _backup_fields(row: Challenge) -> dict[str, object]:
-    return {
-        name: getattr(row, name)
-        for name in BackupChallenge.model_fields
-    }
+    return {name: getattr(row, name) for name in BackupChallenge.model_fields}
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -149,8 +146,9 @@ async def _backup_status(db: DbDep, backup: FlagBackup) -> dict[str, int]:
     missing = identical = conflicts = 0
     for item in backup.challenges:
         row = by_slug.get(item.slug)
-        if (by_hash.get(item.flag_hash, set()) - {item.slug}
-            or (row is not None and _backup_fields(row) != item.model_dump())):
+        if by_hash.get(item.flag_hash, set()) - {item.slug} or (
+            row is not None and _backup_fields(row) != item.model_dump()
+        ):
             conflicts += 1
         elif row is None:
             missing += 1
@@ -165,29 +163,38 @@ async def export_flags(user: FlagAdminUser, db: DbDep, settings: SettingsDep) ->
     rows = (await db.execute(select(Challenge).order_by(Challenge.slug))).scalars().all()
     if len(rows) > MAX_BACKUP_CHALLENGES:
         raise HTTPException(413, "Too many challenges to export")
-    payload = {"version": BACKUP_VERSION, "key_id": _backup_key_id(settings),
-               "challenges": [_backup_fields(row) for row in rows]}
+    payload = {
+        "version": BACKUP_VERSION,
+        "key_id": _backup_key_id(settings),
+        "challenges": [_backup_fields(row) for row in rows],
+    }
     data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(data) > MAX_BACKUP_BYTES:
         raise HTTPException(413, "Backup exceeds size limit")
-    return Response(data, media_type="application/json", headers={
-        "Content-Disposition": 'attachment; filename="fun-with-flags-flags-v1.json"',
-        "Cache-Control": "no-store",
-        "X-Flag-Count": str(len(rows)),
-    })
+    return Response(
+        data,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": 'attachment; filename="fun-with-flags-flags-v1.json"',
+            "Cache-Control": "no-store",
+            "X-Flag-Count": str(len(rows)),
+        },
+    )
 
 
 @router.post("/import-flags/preview")
-async def preview_flags(request: Request, user: FlagAdminUser, db: DbDep,
-                        settings: SettingsDep) -> dict[str, int]:
+async def preview_flags(
+    request: Request, user: FlagAdminUser, db: DbDep, settings: SettingsDep
+) -> dict[str, int]:
     del user
     backup = await _read_backup(request, settings)
     return await _backup_status(db, backup)
 
 
 @router.post("/import-flags")
-async def import_flags(request: Request, user: FlagAdminUser, db: DbDep,
-                       settings: SettingsDep) -> dict[str, int]:
+async def import_flags(
+    request: Request, user: FlagAdminUser, db: DbDep, settings: SettingsDep
+) -> dict[str, int]:
     backup = await _read_backup(request, settings)
     await acquire_flag_mutation_lock(db)
     counts = await _backup_status(db, backup)
@@ -198,8 +205,14 @@ async def import_flags(request: Request, user: FlagAdminUser, db: DbDep,
         for item in backup.challenges:
             if item.slug not in existing_slugs:
                 db.add(Challenge(**item.model_dump()))
-        db.add(AuditLog(user_id=user.id, event_type="flag_admin_backup_imported",
-                        detail={"created": counts["missing"]}, ip_address=client_ip(request)))
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                event_type="flag_admin_backup_imported",
+                detail={"created": counts["missing"]},
+                ip_address=client_ip(request),
+            )
+        )
         try:
             await db.commit()
         except IntegrityError:
@@ -208,9 +221,7 @@ async def import_flags(request: Request, user: FlagAdminUser, db: DbDep,
     return {"created": counts["missing"], "identical": counts["identical"]}
 
 
-async def _resolve_flag(
-    db: DbDep, settings: SettingsDep, plaintext: str
-) -> Challenge | None:
+async def _resolve_flag(db: DbDep, settings: SettingsDep, plaintext: str) -> Challenge | None:
     """Resolve against active and inactive rows; ambiguity is never actionable."""
     candidates = (await db.execute(select(Challenge))).scalars().all()
     matches = [
@@ -256,16 +267,21 @@ async def import_challenges(
     try:
         if len(body.terminal_missing) != len(set(body.terminal_missing)):
             raise ValueError("Challenge list changed; preview again before importing")
-        return await create_challenges(db, settings, {
-            f"crack-the-hash-{name}": value for name in ("easy", "medium", "hard", "extra-hard")
-            if (value := getattr(body, name.replace("-", "_"))) is not None
-        }, set(body.terminal_missing))
+        return await create_challenges(
+            db,
+            settings,
+            {
+                f"crack-the-hash-{name}": value
+                for name in ("easy", "medium", "hard", "extra-hard")
+                if (value := getattr(body, name.replace("-", "_"))) is not None
+            },
+            set(body.terminal_missing),
+        )
     except ValueError as exc:
         # Only fixed, server-owned puzzle slugs can occur in this message.
         raise HTTPException(
-            status.HTTP_409_CONFLICT if any(
-                word in str(exc) for word in ("collision", "differs", "changed")
-            )
+            status.HTTP_409_CONFLICT
+            if any(word in str(exc) for word in ("collision", "differs", "changed"))
             else status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from None
@@ -273,19 +289,26 @@ async def import_challenges(
 
 @router.get("/import-challenges")
 async def import_challenge_status(
-    user: FlagAdminUser, db: DbDep, settings: SettingsDep,
+    user: FlagAdminUser,
+    db: DbDep,
+    settings: SettingsDep,
 ) -> dict[str, list[dict[str, object]]]:
     del user
     try:
         missing = await missing_challenges(db)
-        terminal = [item for item in await terminal_status(db, settings) if item["missing"]]
+        terminal: list[dict[str, object]] = [
+            dict(item) for item in await terminal_status(db, settings) if item["missing"]
+        ]
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from None
-    return {"terminal": terminal, "puzzles": [
-        {"slug": slug, "title": title, "points": points}
-        for slug, title, points, *_ in crack_hashes.PUZZLES
-        if slug in missing
-    ]}
+    return {
+        "terminal": terminal,
+        "puzzles": [
+            {"slug": slug, "title": title, "points": points}
+            for slug, title, points, *_ in crack_hashes.PUZZLES
+            if slug in missing
+        ],
+    }
 
 
 @router.post("/flags", status_code=status.HTTP_201_CREATED)
@@ -390,21 +413,32 @@ async def delete_flag(
         )
 
     title, points = challenge.title, challenge.points
-    affected_users = set((await db.execute(
-        select(Solve.user_id).where(Solve.challenge_id == challenge.id)
-    )).scalars())
+    affected_users = set(
+        (
+            await db.execute(select(Solve.user_id).where(Solve.challenge_id == challenge.id))
+        ).scalars()
+    )
     # Deletion cascades to failed attempts too. Include players who never
     # solved this challenge so an existing/recovered failed count cannot linger.
-    affected_users.update((await db.scalars(
-        select(Submission.user_id).where(
-            Submission.challenge_id == challenge.id, Submission.correct.is_(False),
-        )
-    )).all())
-    affected_groups = set((await db.execute(
-        select(GroupChallengeCredit.group_name).where(
-            GroupChallengeCredit.challenge_id == challenge.id,
-        )
-    )).scalars())
+    affected_users.update(
+        (
+            await db.scalars(
+                select(Submission.user_id).where(
+                    Submission.challenge_id == challenge.id,
+                    Submission.correct.is_(False),
+                )
+            )
+        ).all()
+    )
+    affected_groups = set(
+        (
+            await db.execute(
+                select(GroupChallengeCredit.group_name).where(
+                    GroupChallengeCredit.challenge_id == challenge.id,
+                )
+            )
+        ).scalars()
+    )
     await db.delete(challenge)
     await db.flush()
     await refresh_affected(db, affected_users, affected_groups)

@@ -1,4 +1,5 @@
 """Run the upstream API without containers or startup-time schema changes."""
+
 import os
 import sys
 
@@ -11,7 +12,8 @@ from app.logging import configure_logging
 def configure_environment():
     try:
         mode = resolve_environment(
-            os.environ.get("ENVIRONMENT"), os.environ.get("NODE_ENV", ""),
+            os.environ.get("ENVIRONMENT"),
+            os.environ.get("NODE_ENV", ""),
         )
     except ValueError as exc:
         sys.exit(str(exc))

@@ -1,4 +1,5 @@
 """Isolated CTF simulation. No role mutation or dynamic command dispatch."""
+
 import hmac
 
 from fastapi import APIRouter, HTTPException
@@ -20,7 +21,8 @@ async def catalog(user: CurrentUser):
     return {
         "commands": COMMANDS,
         "invocation": {
-            "method": "POST", "path": "/api/cli/promote_user_to_admin",
+            "method": "POST",
+            "path": "/api/cli/promote_user_to_admin",
             "body": {"token": "<recovered bundle value>"},
         },
     }

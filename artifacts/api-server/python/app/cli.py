@@ -29,29 +29,39 @@ async def _link_saml(path: str) -> None:
     """Explicit, reviewed local mapping. Never link from email or profile attributes."""
     settings = get_settings()
     mapping = json.loads(await asyncio.to_thread(Path(path).read_text))
-    if (set(mapping) != {"user_id", "previous_subject", "issuer", "subject", "approval"}
-            or not all(isinstance(mapping[k], str) and mapping[k] for k in
-                       ["previous_subject", "issuer", "subject", "approval"])
-            or type(mapping["user_id"]) is not int
-            or len(mapping["subject"]) > 255 or len(mapping["approval"]) > 128
-            or mapping["issuer"] != settings.saml_idp_entity_id):
+    if (
+        set(mapping) != {"user_id", "previous_subject", "issuer", "subject", "approval"}
+        or not all(
+            isinstance(mapping[k], str) and mapping[k]
+            for k in ["previous_subject", "issuer", "subject", "approval"]
+        )
+        or type(mapping["user_id"]) is not int
+        or len(mapping["subject"]) > 255
+        or len(mapping["approval"]) > 128
+        or mapping["issuer"] != settings.saml_idp_entity_id
+    ):
         raise ValueError("Invalid reviewed identity mapping")
     db = Database(settings)
     try:
         async with db.session_factory() as session:
-            user = (await session.execute(
-                select(User).where(User.id == mapping["user_id"]).with_for_update()
-            )).scalar_one_or_none()
+            user = (
+                await session.execute(
+                    select(User).where(User.id == mapping["user_id"]).with_for_update()
+                )
+            ).scalar_one_or_none()
             if user is None or not user.is_active or user.okta_sub != mapping["previous_subject"]:
                 raise ValueError("Identity mapping precondition failed")
             if user.okta_sub.startswith("saml:"):
                 raise ValueError("Already-linked SAML identities cannot be relinked")
             user.okta_sub = subject_key(mapping["issuer"], mapping["subject"])
             user.is_admin = False
-            session.add(AuditLog(
-                user_id=user.id, event_type="saml.identity_linked",
-                detail={"approval_reference": mapping["approval"]},
-            ))
+            session.add(
+                AuditLog(
+                    user_id=user.id,
+                    event_type="saml.identity_linked",
+                    detail={"approval_reference": mapping["approval"]},
+                )
+            )
             await session.commit()
     finally:
         await db.dispose()

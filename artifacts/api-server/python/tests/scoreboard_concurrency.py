@@ -1,7 +1,8 @@
 """Real PostgreSQL workers and synthetic ledgers for projection recovery tests."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -23,10 +24,10 @@ from app.schemas import FlagDeleteConfirmIn
 from app.scoreboard_projection import initialize_missing, refresh_affected
 from app.security import encode_flag_delete_token
 
-HISTORICAL = datetime(2026, 1, 1, tzinfo=timezone.utc)
-BONUS_AT = datetime(2026, 1, 2, tzinfo=timezone.utc)
-GOLD_AT = datetime(2026, 1, 3, tzinfo=timezone.utc)
-GROUP_AT = datetime(2026, 1, 4, tzinfo=timezone.utc)
+HISTORICAL = datetime(2026, 1, 1, tzinfo=UTC)
+BONUS_AT = datetime(2026, 1, 2, tzinfo=UTC)
+GOLD_AT = datetime(2026, 1, 3, tzinfo=UTC)
+GROUP_AT = datetime(2026, 1, 4, tzinfo=UTC)
 GROUPS = {"Ops", "Security"}
 
 
@@ -41,10 +42,15 @@ class Workers:
 
     def new_session_factory(self):
         engine = create_async_engine(
-            self.url, pool_size=1, max_overflow=0,
-            connect_args={"server_settings": {
-                "statement_timeout": "10000", "lock_timeout": "8000",
-            }},
+            self.url,
+            pool_size=1,
+            max_overflow=0,
+            connect_args={
+                "server_settings": {
+                    "statement_timeout": "10000",
+                    "lock_timeout": "8000",
+                }
+            },
         )
         self.engines.append(engine)
         return async_sessionmaker(engine, expire_on_commit=False)
@@ -54,40 +60,67 @@ class Workers:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
         async with self.owner.begin() as db:
-            db.add_all([
-                User(id=i, okta_sub=f"synthetic-{i}", username=f"synthetic-{i}", groups=[])
-                for i in (1, 2, 3)
-            ])
-            db.add_all([
-                Challenge(id=i, slug=f"synthetic-{i}", title=f"Synthetic {i}",
-                          category="gold", points=points, flag_hash="0" * 64)
-                for i, points in ((1, 40), (2, 30), (3, 15), (4, 10))
-            ])
+            db.add_all(
+                [
+                    User(id=i, okta_sub=f"synthetic-{i}", username=f"synthetic-{i}", groups=[])
+                    for i in (1, 2, 3)
+                ]
+            )
+            db.add_all(
+                [
+                    Challenge(
+                        id=i,
+                        slug=f"synthetic-{i}",
+                        title=f"Synthetic {i}",
+                        category="gold",
+                        points=points,
+                        flag_hash="0" * 64,
+                    )
+                    for i, points in ((1, 40), (2, 30), (3, 15), (4, 10))
+                ]
+            )
             await db.flush()
-            db.add_all([
-                Solve(user_id=1, challenge_id=1, points_awarded=40, solved_at=HISTORICAL),
-                Submission(user_id=2, challenge_id=1, correct=False, submitted_at=HISTORICAL),
-                GroupChallengeCredit(group_name="Security", challenge_id=1,
-                                     points_awarded=40, awarded_at=HISTORICAL),
-                Solve(user_id=1, challenge_id=4, points_awarded=10, solved_at=BONUS_AT),
-            ])
-            db.add_all([
-                GroupChallengeCredit(group_name=name, challenge_id=4,
-                                     points_awarded=10, awarded_at=BONUS_AT)
-                for name in sorted(GROUPS)
-            ])
+            db.add_all(
+                [
+                    Solve(user_id=1, challenge_id=1, points_awarded=40, solved_at=HISTORICAL),
+                    Submission(user_id=2, challenge_id=1, correct=False, submitted_at=HISTORICAL),
+                    GroupChallengeCredit(
+                        group_name="Security",
+                        challenge_id=1,
+                        points_awarded=40,
+                        awarded_at=HISTORICAL,
+                    ),
+                    Solve(user_id=1, challenge_id=4, points_awarded=10, solved_at=BONUS_AT),
+                ]
+            )
+            db.add_all(
+                [
+                    GroupChallengeCredit(
+                        group_name=name, challenge_id=4, points_awarded=10, awarded_at=BONUS_AT
+                    )
+                    for name in sorted(GROUPS)
+                ]
+            )
             if partial:
                 db.add(PlayerScoreboard(user_id=2, score=0, solves=0, failed_attempts=1))
             if removal:
                 # Exercise a player's final solve and a group whose only credit
                 # belongs to the challenge being deleted.
-                db.add(Solve(user_id=3, challenge_id=1, points_awarded=40,
-                             solved_at=HISTORICAL))
-                db.add(GroupChallengeCredit(group_name="GoldOnly", challenge_id=1,
-                                             points_awarded=40, awarded_at=HISTORICAL))
+                db.add(Solve(user_id=3, challenge_id=1, points_awarded=40, solved_at=HISTORICAL))
+                db.add(
+                    GroupChallengeCredit(
+                        group_name="GoldOnly",
+                        challenge_id=1,
+                        points_awarded=40,
+                        awarded_at=HISTORICAL,
+                    )
+                )
                 if partial:
-                    db.add(GroupScoreboard(group_name="GoldOnly", score=40, solves=1,
-                                           last_solve_at=HISTORICAL))
+                    db.add(
+                        GroupScoreboard(
+                            group_name="GoldOnly", score=40, solves=1, last_solve_at=HISTORICAL
+                        )
+                    )
 
     async def run(self, name, operation, *, ready=None, release=None, before_commit=None):
         factory = self.new_session_factory()
@@ -100,7 +133,7 @@ class Workers:
                 # Test-only transaction barrier: inspect persisted, uncommitted
                 # writes on this session, then interrupt before context commit.
                 await before_commit(db, result)
-            if ready is not None:
+            if ready is not None and release is not None:
                 ready.set()
                 await release.wait()
         return result
@@ -117,16 +150,18 @@ async def gold_solve(db):
         db.add(Solve(user_id=user_id, challenge_id=2, points_awarded=30, solved_at=GOLD_AT))
         db.add(Submission(user_id=user_id, challenge_id=2, correct=True, submitted_at=GOLD_AT))
     for name in ("Security", "NewGroup"):
-        db.add(GroupChallengeCredit(group_name=name, challenge_id=2,
-                                   points_awarded=30, awarded_at=GOLD_AT))
+        db.add(
+            GroupChallengeCredit(
+                group_name=name, challenge_id=2, points_awarded=30, awarded_at=GOLD_AT
+            )
+        )
     await db.flush()
     await refresh_affected(db, {3, 1}, {"Security", "NewGroup"})
 
 
 async def failed_attempts(db):
     for user_id in (2, 1):
-        db.add(Submission(user_id=user_id, challenge_id=2, correct=False,
-                          submitted_at=GROUP_AT))
+        db.add(Submission(user_id=user_id, challenge_id=2, correct=False, submitted_at=GROUP_AT))
     await db.flush()
     await refresh_affected(db, {2, 1}, set())
 
@@ -134,21 +169,29 @@ async def failed_attempts(db):
 async def award_adjustment(db):
     solve = await db.scalar(select(Solve).where(Solve.challenge_id == 4))
     solve.points_awarded = 25
-    for credit in (await db.scalars(select(GroupChallengeCredit).where(
-        GroupChallengeCredit.challenge_id == 4,
-    ))).all():
+    for credit in (
+        await db.scalars(
+            select(GroupChallengeCredit).where(
+                GroupChallengeCredit.challenge_id == 4,
+            )
+        )
+    ).all():
         credit.points_awarded = 25
     await db.flush()
     await refresh_affected(db, {1}, GROUPS)
 
 
 async def group_credits(db):
-    db.add_all([
-        GroupChallengeCredit(group_name="Ops", challenge_id=2,
-                             points_awarded=30, awarded_at=GROUP_AT),
-        GroupChallengeCredit(group_name="Security", challenge_id=3,
-                             points_awarded=15, awarded_at=GROUP_AT),
-    ])
+    db.add_all(
+        [
+            GroupChallengeCredit(
+                group_name="Ops", challenge_id=2, points_awarded=30, awarded_at=GROUP_AT
+            ),
+            GroupChallengeCredit(
+                group_name="Security", challenge_id=3, points_awarded=15, awarded_at=GROUP_AT
+            ),
+        ]
+    )
     await db.flush()
     await refresh_affected(db, set(), {"Security", "Ops"})
 
@@ -164,8 +207,11 @@ async def delete_confirmed_flag(db, settings):
             confirmation_token=encode_flag_delete_token(settings, user.id, challenge),
         ),
         Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1)}),
-        user, db, settings,
+        user,
+        db,
+        settings,
     )
+
 
 async def remove_with_commit_hook(db, settings, monkeypatch, before_commit):
     """Test-only interruption boundary after the real removal, before its commit."""
@@ -185,29 +231,33 @@ async def remove_with_commit_hook(db, settings, monkeypatch, before_commit):
 async def assert_writer_blocks_recovery(observer, workers, names, *, writer="writer"):
     """Each waiter is blocked on an advisory key actually held by the writer."""
     for name in names:
-        assert await observer.scalar(text(
-            "SELECT EXISTS (SELECT 1 FROM pg_locks waiting "
-            "JOIN pg_locks held ON held.locktype = waiting.locktype "
-            "AND held.database = waiting.database AND held.classid = waiting.classid "
-            "AND held.objid = waiting.objid AND held.objsubid = waiting.objsubid "
-            "WHERE waiting.locktype = 'advisory' AND NOT waiting.granted "
-            "AND waiting.pid = :waiter AND held.granted AND held.pid = :writer "
-            "AND :writer = ANY(pg_blocking_pids(:waiter)))"
-        ), {"waiter": workers.pids[name], "writer": workers.pids[writer]})
+        assert await observer.scalar(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM pg_locks waiting "
+                "JOIN pg_locks held ON held.locktype = waiting.locktype "
+                "AND held.database = waiting.database AND held.classid = waiting.classid "
+                "AND held.objid = waiting.objid AND held.objsubid = waiting.objsubid "
+                "WHERE waiting.locktype = 'advisory' AND NOT waiting.granted "
+                "AND waiting.pid = :waiter AND held.granted AND held.pid = :writer "
+                "AND :writer = ANY(pg_blocking_pids(:waiter)))"
+            ),
+            {"waiter": workers.pids[name], "writer": workers.pids[writer]},
+        )
 
 
 async def assert_recovery_holds_players_waiting_for_group(
-    observer, workers, name, *, partial,
+    observer,
+    workers,
+    name,
+    *,
+    partial,
 ):
     """Prove partial lock acquisition, not merely a wait on the first player."""
     locks = await advisory_locks(observer, workers, [name])
     # pg_locks exposes the signed hashtext key as an unsigned OID.
-    ops_key = await observer.scalar(text(
-        "SELECT hashtext('Ops')::bigint & 4294967295"
-    ))
+    ops_key = await observer.scalar(text("SELECT hashtext('Ops')::bigint & 4294967295"))
     expected = {
-        (1180124755, user_id, 2, "ExclusiveLock", True)
-        for user_id in ([1] if partial else [1, 2])
+        (1180124755, user_id, 2, "ExclusiveLock", True) for user_id in ([1] if partial else [1, 2])
     }
     expected.add((1180124756, ops_key, 2, "ExclusiveLock", False))
     assert {
@@ -218,18 +268,24 @@ async def assert_recovery_holds_players_waiting_for_group(
 
 async def advisory_locks(observer, workers, names):
     """Include granted AND waiting locks, using the original backend PIDs."""
-    return (await observer.execute(text(
-        "SELECT pid, database, classid, objid, objsubid, mode, granted "
-        "FROM pg_locks WHERE locktype = 'advisory' AND pid = ANY(:pids) "
-        "ORDER BY pid, database, classid, objid, objsubid, mode, granted"
-    ), {"pids": [workers.pids[name] for name in names]})).all()
+    return (
+        await observer.execute(
+            text(
+                "SELECT pid, database, classid, objid, objsubid, mode, granted "
+                "FROM pg_locks WHERE locktype = 'advisory' AND pid = ANY(:pids) "
+                "ORDER BY pid, database, classid, objid, objsubid, mode, granted"
+            ),
+            {"pids": [workers.pids[name] for name in names]},
+        )
+    ).all()
 
 
 async def wait_for_no_advisory_locks(observer, workers, names):
     # asyncpg may finish terminating a cancelled connection just after its task
     # exits. Observe that cleanup, bounded independently of the lock timeout.
     async with asyncio.timeout(5):
-        while await advisory_locks(observer, workers, names):
+        # Polls state owned by another process or connection; there is no event to await.
+        while await advisory_locks(observer, workers, names):  # noqa: ASYNC110
             await asyncio.sleep(0.01)
 
 
@@ -242,12 +298,20 @@ async def wait_for_advisory_waiters(observer, workers, names, tasks):
                     # Surface DB exceptions rather than hiding them behind a timeout.
                     task.result()
                     raise AssertionError("Worker completed without the required contention")
-            pids = set((await observer.scalars(text(
-                "SELECT DISTINCT pid FROM pg_locks "
-                "WHERE locktype = 'advisory' AND NOT granted"
-            ))).all())
-            if (all(name in workers.pids for name in names)
-                    and {workers.pids[name] for name in names} <= pids):
+            pids = set(
+                (
+                    await observer.scalars(
+                        text(
+                            "SELECT DISTINCT pid FROM pg_locks "
+                            "WHERE locktype = 'advisory' AND NOT granted"
+                        )
+                    )
+                ).all()
+            )
+            if (
+                all(name in workers.pids for name in names)
+                and {workers.pids[name] for name in names} <= pids
+            ):
                 assert len(set(workers.pids.values())) == len(workers.pids)
                 return
             await asyncio.sleep(0.01)
@@ -266,15 +330,21 @@ async def snapshot_records(db, models):
     for model in models:
         table = model.__table__
         result[table.name] = [
-            dict(row) for row in (await db.execute(
-                select(table).order_by(*table.primary_key.columns)
-            )).mappings()
+            dict(row)
+            for row in (
+                await db.execute(select(table).order_by(*table.primary_key.columns))
+            ).mappings()
         ]
     return result
 
 
 async def assert_committed_totals(
-    workers, *, writes=False, removal=False, rolled_back=False, group_player_writes=False,
+    workers,
+    *,
+    writes=False,
+    removal=False,
+    rolled_back=False,
+    group_player_writes=False,
 ):
     """Independent Python ledger oracle plus exact expected synthetic totals."""
     async with workers.owner() as db:
@@ -298,11 +368,11 @@ async def assert_committed_totals(
         assert (len(solves), len(attempts), len(credits)) == counts
         # Player rows remain at zero after the last ledger entry is removed;
         # unlike group rows, they are not deleted by refresh_player.
-        players = {i: [0, 0, None, 0] for i in (1, 2, 3)} if removal else {}
-        groups = {}
+        players: dict[int, list[Any]] = {i: [0, 0, None, 0] for i in (1, 2, 3)} if removal else {}
+        groups: dict[str, list[Any]] = {}
 
         def award(rows, key, points, at, *, player=False):
-            row = rows.setdefault(key, [0, 0, None, 0] if player else [0, 0, None])
+            row: list[Any] = rows.setdefault(key, [0, 0, None, 0] if player else [0, 0, None])
             row[0] += points
             row[1] += 1
             row[2] = max(filter(None, (row[2], at)), default=None)
@@ -324,26 +394,41 @@ async def assert_committed_totals(
         }
         assert actual_players == players, (actual_players, players)
         assert actual_groups == groups, (actual_groups, groups)
-        expected_players = ({
-            1: [95, 3, GOLD_AT, 1], 2: [0, 0, None, 2], 3: [30, 1, GOLD_AT, 0],
-        } if writes else {1: [50, 2, BONUS_AT, 0], 2: [0, 0, None, 1]})
-        expected_groups = ({
-            "Security": [110, 4, GROUP_AT], "Ops": [55, 2, GROUP_AT],
-            "NewGroup": [30, 1, GOLD_AT],
-        } if writes else {"Security": [50, 2, BONUS_AT], "Ops": [10, 1, BONUS_AT]})
+        expected_players = (
+            {
+                1: [95, 3, GOLD_AT, 1],
+                2: [0, 0, None, 2],
+                3: [30, 1, GOLD_AT, 0],
+            }
+            if writes
+            else {1: [50, 2, BONUS_AT, 0], 2: [0, 0, None, 1]}
+        )
+        expected_groups = (
+            {
+                "Security": [110, 4, GROUP_AT],
+                "Ops": [55, 2, GROUP_AT],
+                "NewGroup": [30, 1, GOLD_AT],
+            }
+            if writes
+            else {"Security": [50, 2, BONUS_AT], "Ops": [10, 1, BONUS_AT]}
+        )
         if group_player_writes:
             expected_players = {
-                1: [50, 2, BONUS_AT, 1], 2: [0, 0, None, 2],
+                1: [50, 2, BONUS_AT, 1],
+                2: [0, 0, None, 2],
             }
             expected_groups = {
-                "Security": [65, 3, GROUP_AT], "Ops": [40, 2, GROUP_AT],
+                "Security": [65, 3, GROUP_AT],
+                "Ops": [40, 2, GROUP_AT],
             }
         if rolled_back:
             expected_players[3] = [40, 1, HISTORICAL, 0]
             expected_groups["GoldOnly"] = [40, 1, HISTORICAL]
         elif removal:
             expected_players = {
-                1: [10, 1, BONUS_AT, 0], 2: [0, 0, None, 0], 3: [0, 0, None, 0],
+                1: [10, 1, BONUS_AT, 0],
+                2: [0, 0, None, 0],
+                3: [0, 0, None, 0],
             }
             expected_groups = {"Security": [10, 1, BONUS_AT], "Ops": [10, 1, BONUS_AT]}
         assert actual_players == expected_players

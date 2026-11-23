@@ -1,4 +1,5 @@
 """Intentionally flawed toy operations on constants, behind normal sign-in."""
+
 import posixpath
 
 from fastapi import APIRouter, HTTPException, Query
@@ -13,11 +14,14 @@ router = APIRouter(prefix="/training", tags=["training"])
 @router.get("/invoices/{invoice_id}")
 async def invoice(invoice_id: int, user: CurrentUser):
     if invoice_id == 1042:
-        return {"id": 1042, "owner": "training-learner", "amount": 25,
-                "notice": "Fictional billing records are numbered sequentially."}
+        return {
+            "id": 1042,
+            "owner": "training-learner",
+            "amount": 25,
+            "notice": "Fictional billing records are numbered sequentially.",
+        }
     if invoice_id == 1043:
-        return {"id": 1043, "owner": "training-finance", "amount": 300,
-                "flag": PUZZLES[0][3]}
+        return {"id": 1043, "owner": "training-finance", "amount": 300, "flag": PUZZLES[0][3]}
     raise HTTPException(404, "No such training invoice")
 
 

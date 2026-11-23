@@ -13,7 +13,9 @@ PUZZLE_VALUE = "ctf-only.7e19b42d.93ac608f.bundle"
 POINTS = 200
 
 # Application commands and supported shell entry points. Discovery grants no permissions.
-COMMANDS = sorted(set("""
+COMMANDS = sorted(
+    set(
+        """
 about adventure challenges challenge clear create_flag delete_flag lab
 export_flags help import_challenges import_flags fortune reset scoreboard login logout
 reset-shell status stty submit leaderboard top groups vim ex sl
@@ -26,4 +28,6 @@ tr tree unzip wget which xargs yes zip dir ll pg egrep fgrep w users su sudo pas
 shutdown reboot swinstall sam crontab mount exit ed emacs nano test [
 alias unalias export unset set source . true false read shift return break continue
 history jobs wait kill type command eval exec umask
-""".split()))
+""".split()
+    )
+)

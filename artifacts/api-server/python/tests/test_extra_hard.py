@@ -1,4 +1,5 @@
 """Extra-hard import verifies bcrypt and derives the same SHA1 flag format."""
+
 import hashlib
 
 import bcrypt
@@ -11,11 +12,17 @@ from tests.test_flag_admin import _member
 
 
 async def test_extra_hard_import_verifies_plaintext_and_awards_once(
-    monkeypatch, client, settings, session,
+    monkeypatch,
+    client,
+    settings,
+    session,
 ):
     puzzle = crack_hashes.PUZZLES[-1]
     assert puzzle[:4] == (
-        "crack-the-hash-extra-hard", "Crack The Hash: Extra Hard", 750, "bcrypt",
+        "crack-the-hash-extra-hard",
+        "Crack The Hash: Extra Hard",
+        750,
+        "bcrypt",
     )
     assert puzzle[4] == "$2a$08$VP3PiYeRMjPBBqpLizfKduLJ7qBTOiaBRZ1pmoGh3sbR3/jluJl7e"
     assert puzzle[5] == (
@@ -52,7 +59,9 @@ async def test_extra_hard_import_verifies_plaintext_and_awards_once(
     answer = hashlib.sha1(word.encode()).hexdigest()
     for points in (750, 0):
         result = await client.post(
-            "/api/challenges/submit", headers=player, json={"flag": answer},
+            "/api/challenges/submit",
+            headers=player,
+            json={"flag": answer},
         )
         assert result.status_code == 200
         assert result.json()["correct"] is True

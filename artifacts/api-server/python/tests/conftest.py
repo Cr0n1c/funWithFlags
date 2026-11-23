@@ -21,6 +21,7 @@ def disable_slack_activity(monkeypatch: pytest.MonkeyPatch) -> None:
     # Notification tests explicitly inject a fake destination and HTTP transport.
     monkeypatch.setenv("SLACK_ACTIVITY_WEBHOOK_URL", "")
 
+
 TEST_ENV = {
     "ENVIRONMENT": "test",
     "LOG_JSON": "false",

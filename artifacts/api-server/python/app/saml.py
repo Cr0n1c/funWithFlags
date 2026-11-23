@@ -1,4 +1,5 @@
 """Strict SAML toolkit adapter. Never expose toolkit diagnostics or raw assertions."""
+
 from __future__ import annotations
 
 import hashlib
@@ -16,8 +17,12 @@ from onelogin.saml2.xml_utils import OneLogin_Saml2_XML
 from app.config import Settings, public_https_origin
 
 ATTRIBUTES = {
-    "email": 320, "first_name": 128, "last_name": 128,
-    "department_parent": 255, "department_leaf": 255, "level": 128,
+    "email": 320,
+    "first_name": 128,
+    "last_name": 128,
+    "department_parent": 255,
+    "department_leaf": 255,
+    "level": 128,
 }
 ATTRIBUTE_SOURCES = {
     "email": "email",
@@ -42,8 +47,15 @@ def subject_key(issuer: str, subject: str) -> str:
 
 
 def toolkit_settings(s: Settings) -> dict:
-    if not all([s.saml_idp_entity_id, s.saml_idp_sso_url,
-                s.saml_idp_cert.get_secret_value(), s.saml_sp_entity_id, s.saml_acs_url]):
+    if not all(
+        [
+            s.saml_idp_entity_id,
+            s.saml_idp_sso_url,
+            s.saml_idp_cert.get_secret_value(),
+            s.saml_sp_entity_id,
+            s.saml_acs_url,
+        ]
+    ):
         raise SamlError("Okta SAML is not configured. Contact the administrator.")
     try:
         acs = urlsplit(s.saml_acs_url)
@@ -56,11 +68,19 @@ def toolkit_settings(s: Settings) -> dict:
         valid_sso = bool(sso.hostname and sso.port != 0)
     except (ValueError, TypeError):
         raise SamlError("Okta SAML configuration is invalid.") from None
-    if (not public_https_origin(s.app_base_url, production=s.is_production)
-            or acs.scheme != "https" or acs.netloc != origin.netloc
-            or acs.path != "/api/auth/saml/acs" or acs.query or acs.fragment
-            or acs.username or sso.scheme != "https" or not valid_sso
-            or sso.username or sso.fragment):
+    if (
+        not public_https_origin(s.app_base_url, production=s.is_production)
+        or acs.scheme != "https"
+        or acs.netloc != origin.netloc
+        or acs.path != "/api/auth/saml/acs"
+        or acs.query
+        or acs.fragment
+        or acs.username
+        or sso.scheme != "https"
+        or not valid_sso
+        or sso.username
+        or sso.fragment
+    ):
         raise SamlError("Okta SAML configuration is invalid.")
     if not set(s.saml_required_attributes).issubset(ATTRIBUTES):
         raise SamlError("Okta SAML attribute configuration is invalid.")
@@ -69,12 +89,14 @@ def toolkit_settings(s: Settings) -> dict:
     if bool(signing_key) != bool(signing_cert):
         raise SamlError("Both SP signing key and certificate must be configured.")
     result: dict[str, Any] = {
-        "strict": True, "debug": False,
+        "strict": True,
+        "debug": False,
         "sp": {
             "entityId": s.saml_sp_entity_id,
             "assertionConsumerService": {"url": s.saml_acs_url, "binding": C.BINDING_HTTP_POST},
             "NameIDFormat": C.NAMEID_PERSISTENT,
-            "x509cert": signing_cert, "privateKey": signing_key,
+            "x509cert": signing_cert,
+            "privateKey": signing_key,
         },
         "idp": {
             "entityId": s.saml_idp_entity_id,
@@ -82,13 +104,16 @@ def toolkit_settings(s: Settings) -> dict:
             "x509cert": s.saml_idp_cert.get_secret_value(),
         },
         "security": {
-            "wantAssertionsSigned": True, "wantMessagesSigned": True,
-            "wantNameId": True, "wantXMLValidation": True,
+            "wantAssertionsSigned": True,
+            "wantMessagesSigned": True,
+            "wantNameId": True,
+            "wantXMLValidation": True,
             "rejectUnsolicitedResponsesWithInResponseTo": True,
             "requestedAuthnContext": False,
             "rejectDeprecatedAlgorithm": True,
             "authnRequestsSigned": bool(signing_key),
-            "signatureAlgorithm": C.RSA_SHA256, "digestAlgorithm": C.SHA256,
+            "signatureAlgorithm": C.RSA_SHA256,
+            "digestAlgorithm": C.SHA256,
         },
     }
     rollover = s.saml_idp_rollover_cert.get_secret_value()
@@ -104,10 +129,16 @@ def auth(s: Settings, post: dict | None = None) -> OneLogin_Saml2_Auth:
     config = toolkit_settings(s)
     acs = urlsplit(s.saml_acs_url)
     try:
-        return OneLogin_Saml2_Auth({
-            "https": "on", "http_host": acs.netloc,
-            "script_name": acs.path, "get_data": {}, "post_data": post or {},
-        }, config)
+        return OneLogin_Saml2_Auth(
+            {
+                "https": "on",
+                "http_host": acs.netloc,
+                "script_name": acs.path,
+                "get_data": {},
+                "post_data": post or {},
+            },
+            config,
+        )
     except Exception:
         raise SamlError("Okta SAML configuration is invalid.") from None
 
@@ -127,16 +158,24 @@ def metadata(s: Settings) -> str:
 
 def validated_groups(groups: Any) -> list[str]:
     """Bound display-only memberships; never use these claims as role inputs."""
-    if (not isinstance(groups, list) or len(groups) > 200
-            or any(not isinstance(group, str) or len(group) > 255
-                   or any(unicodedata.category(char).startswith("C") for char in group)
-                   for group in groups)):
+    if (
+        not isinstance(groups, list)
+        or len(groups) > 200
+        or any(
+            not isinstance(group, str)
+            or len(group) > 255
+            or any(unicodedata.category(char).startswith("C") for char in group)
+            for group in groups
+        )
+    ):
         raise SamlError("Okta SAML group attributes are invalid.")
     return sorted({group.strip() for group in groups if group.strip()})
 
 
 def validate(  # noqa: PLR0912 - explicit fail-closed validation gates
-    s: Settings, encoded: str, request_id: str,
+    s: Settings,
+    encoded: str,
+    request_id: str,
 ) -> tuple[str, str, dict]:
     try:
         client = auth(s, {"SAMLResponse": encoded})
@@ -160,20 +199,32 @@ def validate(  # noqa: PLR0912 - explicit fail-closed validation gates
             raise SamlError("Okta SAML issuer validation failed.")
         conditions = assertion.xpath("./s:Conditions", namespaces=ns)
         restrictions = assertion.xpath(
-            "./s:Conditions/s:AudienceRestriction", namespaces=ns,
+            "./s:Conditions/s:AudienceRestriction",
+            namespaces=ns,
         )
-        if (len(conditions) != 1 or not conditions[0].get("NotBefore")
-                or not conditions[0].get("NotOnOrAfter") or not restrictions
-                or any(s.saml_sp_entity_id not in restriction.xpath(
-                    "./s:Audience/text()", namespaces=ns,
-                ) for restriction in restrictions)):
+        if (
+            len(conditions) != 1
+            or not conditions[0].get("NotBefore")
+            or not conditions[0].get("NotOnOrAfter")
+            or not restrictions
+            or any(
+                s.saml_sp_entity_id
+                not in restriction.xpath(
+                    "./s:Audience/text()",
+                    namespaces=ns,
+                )
+                for restriction in restrictions
+            )
+        ):
             raise SamlError("Okta SAML audience or validity is missing.")
         confirmations = assertion.xpath(
-            "./s:Subject/s:SubjectConfirmation/s:SubjectConfirmationData", namespaces=ns,
+            "./s:Subject/s:SubjectConfirmation/s:SubjectConfirmationData",
+            namespaces=ns,
         )
         if len(confirmations) != 1 or not all(
             node.get("Recipient") == s.saml_acs_url
-            and node.get("InResponseTo") == request_id and node.get("NotOnOrAfter")
+            and node.get("InResponseTo") == request_id
+            and node.get("NotOnOrAfter")
             for node in confirmations
         ):
             raise SamlError("Okta SAML subject confirmation failed.")
@@ -183,9 +234,13 @@ def validate(  # noqa: PLR0912 - explicit fail-closed validation gates
         if client.get_nameid_nq() not in (None, s.saml_idp_entity_id):
             raise SamlError("Okta SAML identity qualifier is invalid.")
         assertion_id = client.get_last_assertion_id()
-        if (not subject or len(subject) > 255 or not assertion_id
-                or len(assertion_id) > 255
-                or client.get_nameid_format() != C.NAMEID_PERSISTENT):
+        if (
+            not subject
+            or len(subject) > 255
+            or not assertion_id
+            or len(assertion_id) > 255
+            or client.get_nameid_format() != C.NAMEID_PERSISTENT
+        ):
             raise SamlError("Okta SAML stable identity is missing or invalid.")
         attrs = client.get_attributes()
         profile = {}
@@ -195,8 +250,11 @@ def validate(  # noqa: PLR0912 - explicit fail-closed validation gates
                 raise SamlError("Okta SAML profile attributes are invalid.")
             value = values[0] if values else None
             if value is not None:
-                if (not isinstance(value, str) or len(value) > limit
-                        or any(ord(c) < 32 for c in value)):
+                if (
+                    not isinstance(value, str)
+                    or len(value) > limit
+                    or any(ord(c) < 32 for c in value)
+                ):
                     raise SamlError("Okta SAML profile attributes are invalid.")
                 value = value.strip() or None
             if name in s.saml_required_attributes and value is None:

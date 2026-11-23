@@ -1,4 +1,5 @@
 """Bounded public HTTP GET. IMDS is a constant fixture, never a network target."""
+
 import asyncio
 import http.client
 import ipaddress
@@ -11,14 +12,19 @@ import threading
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
+
 from app.curl_limits import PlayerCurlLimiter
 from app.imds_fixture import metadata_response
 
 FLAG = "always_check_ssrf_imdsv1"
-PUZZLE = ("curl-metadata", "Find the built in command that is SSRF by design",
-          "A server can make requests on your behalf. Explore curl and consider "
-          "where an instance might learn about itself. OWASP A10:2021 SSRF.",
-          FLAG, 125)
+PUZZLE = (
+    "curl-metadata",
+    "Find the built in command that is SSRF by design",
+    "A server can make requests on your behalf. Explore curl and consider "
+    "where an instance might learn about itself. OWASP A10:2021 SSRF.",
+    FLAG,
+    125,
+)
 SLOTS = threading.BoundedSemaphore(4)
 PLAYER_LIMITS = PlayerCurlLimiter()
 MAX_CHARS = 500
@@ -57,18 +63,32 @@ async def fetch_for_player(raw: str, user_id: int) -> str:
 def public_address(value):
     ip = ipaddress.ip_address(value)
     # Disallow transition/mapped IPv6 too: some embed non-public IPv4 targets.
-    return (ip.is_global and not ip.is_multicast
-            and not (isinstance(ip, ipaddress.IPv6Address)
-                     and (ip.ipv4_mapped or ip.sixtofour or ip.teredo
-                          or ip in ipaddress.ip_network("64:ff9b::/96")
-                          or ip in ipaddress.ip_network("64:ff9b:1::/48"))))
+    return (
+        ip.is_global
+        and not ip.is_multicast
+        and not (
+            isinstance(ip, ipaddress.IPv6Address)
+            and (
+                ip.ipv4_mapped
+                or ip.sixtofour
+                or ip.teredo
+                or ip in ipaddress.ip_network("64:ff9b::/96")
+                or ip in ipaddress.ip_network("64:ff9b:1::/48")
+            )
+        )
+    )
 
 
 def _parse_url(raw):
     if len(raw) > 2048 or any(ord(c) <= 32 or ord(c) == 127 for c in raw) or "\\" in raw:
         raise ValueError("Invalid URL")
     url = urlsplit(raw if "://" in raw else "http://" + raw)
-    if url.scheme not in ("http", "https") or not url.hostname or url.username is not None or url.password is not None:
+    if (
+        url.scheme not in ("http", "https")
+        or not url.hostname
+        or url.username is not None
+        or url.password is not None
+    ):
         raise ValueError("Only HTTP(S) URLs without credentials are supported")
     host = url.hostname.encode("idna").decode("ascii")
     port = url.port or (443 if url.scheme == "https" else 80)
@@ -104,7 +124,9 @@ def _run_worker(raw):
         # Use this interpreter and its system CA store, not API credentials,
         # proxies, Python overrides, or parent-supplied TLS trust overrides.
         env={},
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
     try:
         try:
@@ -138,8 +160,9 @@ def _run_worker(raw):
                 process.kill()
             process.wait()
         finally:
-            process.stdin.close()
-            process.stdout.close()
+            for pipe in (process.stdin, process.stdout):
+                if pipe is not None:
+                    pipe.close()
 
 
 def _fetch_transport(url, host, port):
@@ -163,7 +186,9 @@ def _fetch_transport(url, host, port):
         conn = http.client.HTTPConnection(host, port, timeout=5)
         conn.sock = sock
         path = (url.path or "/") + ("?" + url.query if url.query else "")
-        conn.request("GET", path, headers={"Accept-Encoding": "identity", "User-Agent": "CTF-curl/1.0"})
+        conn.request(
+            "GET", path, headers={"Accept-Encoding": "identity", "User-Agent": "CTF-curl/1.0"}
+        )
         response = conn.getresponse()
         if 300 <= response.status < 400:
             raise ValueError("Redirects are not followed; request the public destination directly")
@@ -172,7 +197,9 @@ def _fetch_transport(url, host, port):
         data = response.read(MAX_BYTES)
         text = data.decode("utf-8", errors="replace")[:MAX_CHARS]
         # Never pass remote ANSI/terminal control sequences to the terminal.
-        return "".join(c for c in text if c in "\n\t" or (ord(c) >= 32 and not 127 <= ord(c) <= 159))
+        return "".join(
+            c for c in text if c in "\n\t" or (ord(c) >= 32 and not 127 <= ord(c) <= 159)
+        )
     finally:
         try:
             if conn:

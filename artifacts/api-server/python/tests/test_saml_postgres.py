@@ -2,6 +2,7 @@
 
 Run through validate_saml_postgres.py with an explicitly approved dedicated target.
 """
+
 import asyncio
 import os
 import uuid
@@ -21,7 +22,8 @@ from app.models import SamlReplay, SamlTransaction, User
 from tests.test_auth import CERT, assertion
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("SAML_TEST_POSTGRES") != "1", reason="explicit development DB opt-in required",
+    os.environ.get("SAML_TEST_POSTGRES") != "1",
+    reason="explicit development DB opt-in required",
 )
 
 
@@ -33,11 +35,16 @@ async def isolated_postgres():
     if not target:
         pytest.fail("A dedicated PostgreSQL test target is required")
     settings = Settings(
-        database_url=SecretStr(target), db_echo=False,
-        app_base_url="https://ui.test", saml_sp_entity_id="https://ui.test/saml",
+        database_url=SecretStr(target),
+        db_echo=False,
+        app_base_url="https://ui.test",
+        saml_sp_entity_id="https://ui.test/saml",
         saml_acs_url="https://ui.test/api/auth/saml/acs",
-        saml_idp_entity_id="https://idp.test/entity", saml_idp_sso_url="https://idp.test/sso",
-        saml_idp_cert=SecretStr(CERT), run_migrations_on_startup=False, seed_on_startup=False,
+        saml_idp_entity_id="https://idp.test/entity",
+        saml_idp_sso_url="https://idp.test/sso",
+        saml_idp_cert=SecretStr(CERT),
+        run_migrations_on_startup=False,
+        seed_on_startup=False,
     )
     if settings.environment != "development":
         pytest.fail("PostgreSQL verification is permitted only in development")
@@ -47,7 +54,8 @@ async def isolated_postgres():
     control = Database(settings)
     db = Database.__new__(Database)
     db.engine = create_async_engine(
-        settings.sqlalchemy_url, hide_parameters=True,
+        settings.sqlalchemy_url,
+        hide_parameters=True,
         connect_args={"server_settings": {"search_path": schema}},
     )
     db.session_factory = async_sessionmaker(db.engine, expire_on_commit=False)
@@ -61,7 +69,8 @@ async def isolated_postgres():
             await conn.run_sync(Base.metadata.create_all)
         app = create_app(settings, database=db)
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="https://ui.test",
+            transport=httpx.ASGITransport(app=app),
+            base_url="https://ui.test",
         ) as client:
             async with app.router.lifespan_context(app):
                 yield settings, db, client
@@ -127,14 +136,19 @@ async def test_concurrent_saml_postgres(isolated_postgres, monkeypatch, case):
     async def finish(flow_data):
         relay, request_id, cookie = flow_data
         encoded = assertion(
-            settings, request_id, aid="_shared" if case == "assertion_replay" else None,
+            settings,
+            request_id,
+            aid="_shared" if case == "assertion_replay" else None,
         )
-        return await client.post("/api/auth/saml/acs",
+        return await client.post(
+            "/api/auth/saml/acs",
             data={"SAMLResponse": encoded, "RelayState": relay},
-            headers={"Cookie": f"{settings.saml_transaction_cookie_name}={cookie}"})
+            headers={"Cookie": f"{settings.saml_transaction_cookie_name}={cookie}"},
+        )
 
     results = await asyncio.wait_for(
-        asyncio.gather(finish(first), finish(second)), timeout=30,
+        asyncio.gather(finish(first), finish(second)),
+        timeout=30,
     )
     successes = sum("auth=ok" in result.headers["location"] for result in results)
     assert successes == (2 if case == "jit" else 1)

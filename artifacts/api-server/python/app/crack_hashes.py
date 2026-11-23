@@ -17,12 +17,13 @@ import bcrypt
 from sqlalchemy import and_, case, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import bundle_challenge
 from app.config import Settings
 from app.models import Challenge
-from app.talk_challenges import TALK_CHALLENGES
+from app.public_curl import PUZZLE as curl_puzzle
 from app.security import acquire_flag_mutation_lock, hash_flag
+from app.talk_challenges import TALK_CHALLENGES
 from app.terminal_challenges import TERMINAL_CHALLENGES, prepare_terminal_challenges
-from app import bundle_challenge
 
 PUZZLES = (
     (
@@ -87,24 +88,27 @@ async def normalize_hash_categories(db: AsyncSession) -> int:
     ]
     # A deployment applies schema, not content changes. Reclassify only the exact
     # legacy bundled-token puzzle; preserve its flag, points and earned credit.
-    matches.append(and_(
-        Challenge.slug == bundle_challenge.SLUG,
-        Challenge.title == bundle_challenge.TITLE,
-        Challenge.description == bundle_challenge.DESCRIPTION,
-        Challenge.points.in_([150, bundle_challenge.POINTS]),
-    ))
-    from app.public_curl import PUZZLE as curl_puzzle
+    matches.append(
+        and_(
+            Challenge.slug == bundle_challenge.SLUG,
+            Challenge.title == bundle_challenge.TITLE,
+            Challenge.description == bundle_challenge.DESCRIPTION,
+            Challenge.points.in_([150, bundle_challenge.POINTS]),
+        )
+    )
     # Existing Demo Day records only: deployment does not copy development data.
     # Match the complete original metadata, leaving customized records alone.
-    legacy_talk = or_(*[
-        and_(
-            Challenge.slug == slug,
-            Challenge.title == title,
-            Challenge.description == description,
-            Challenge.points == 500,
-        )
-        for slug, title, description, _ in TALK_CHALLENGES
-    ])
+    legacy_talk = or_(
+        *[
+            and_(
+                Challenge.slug == slug,
+                Challenge.title == title,
+                Challenge.description == description,
+                Challenge.points == 500,
+            )
+            for slug, title, description, _ in TALK_CHALLENGES
+        ]
+    )
     matches.append(legacy_talk)
     legacy_curl = and_(
         Challenge.slug == curl_puzzle[0],
@@ -121,13 +125,17 @@ async def normalize_hash_categories(db: AsyncSession) -> int:
             Challenge.hidden.is_(False),
             or_(and_(Challenge.category == "gold", or_(*matches)), legacy_curl),
         )
-        .values(category=case(
-            (legacy_talk, "Talks"),
-            (Challenge.slug == bundle_challenge.SLUG, "OWASP"),
-            (Challenge.slug == curl_puzzle[0], "OWASP"), else_="cracking",
-        ), title=case((legacy_curl, curl_puzzle[1]), else_=Challenge.title),
+        .values(
+            category=case(
+                (legacy_talk, "Talks"),
+                (Challenge.slug == bundle_challenge.SLUG, "OWASP"),
+                (Challenge.slug == curl_puzzle[0], "OWASP"),
+                else_="cracking",
+            ),
+            title=case((legacy_curl, curl_puzzle[1]), else_=Challenge.title),
             points=case((legacy_curl, curl_puzzle[4]), else_=Challenge.points),
-            updated_at=Challenge.updated_at)
+            updated_at=Challenge.updated_at,
+        )
         .returning(Challenge.id)
     )
     changed = len(result.scalars().all())
@@ -156,9 +164,11 @@ def verify_words(words: dict[str, str], required: set[str] | None = None) -> Non
 
 async def missing_challenges(db: AsyncSession) -> list[str]:
     """Only metadata is returned; existing answers are never needed or disclosed."""
-    rows = (await db.execute(select(Challenge).where(
-        Challenge.slug.in_([p[0] for p in PUZZLES])
-    ))).scalars().all()
+    rows = (
+        (await db.execute(select(Challenge).where(Challenge.slug.in_([p[0] for p in PUZZLES]))))
+        .scalars()
+        .all()
+    )
     by_slug = {row.slug: row for row in rows}
     missing = []
     for slug, title, points, algorithm, digest, hint in PUZZLES:
@@ -166,17 +176,22 @@ async def missing_challenges(db: AsyncSession) -> list[str]:
         if row is None:
             missing.append(slug)
         elif (
-            row.title != title or row.points != points
+            row.title != title
+            or row.points != points
             or row.category not in ("gold", "cracking")
             or row.description != puzzle_description(algorithm, digest, hint)
-            or row.case_sensitive or not row.is_active or row.hidden
+            or row.case_sensitive
+            or not row.is_active
+            or row.hidden
         ):
             raise ValueError(f"Existing {slug} differs; no challenges provisioned")
     return missing
 
 
 async def create_challenges(
-    db: AsyncSession, settings: Settings, words: dict[str, str],
+    db: AsyncSession,
+    settings: Settings,
+    words: dict[str, str],
     terminal_missing: set[str] | None = None,
 ) -> dict[str, int]:
     """Explicitly requested atomic import; caller enforces its own authorization."""
@@ -200,18 +215,23 @@ async def create_challenges(
         # Its HMAC cannot be reversed to rule that out; refuse rather than create
         # an ambiguous case-insensitive answer.
         if flag_digest in seen_flag_hashes or any(
-            challenge.slug != slug and (
-                challenge.case_sensitive or challenge.flag_hash == flag_digest
-            )
+            challenge.slug != slug
+            and (challenge.case_sensitive or challenge.flag_hash == flag_digest)
             for challenge in existing
         ):
             raise ValueError(f"Flag collision for {slug}; no challenges provisioned")
         seen_flag_hashes.add(flag_digest)
         pending.append(
             Challenge(
-                slug=slug, title=title, category="cracking", description=description,
-                points=points, flag_hash=flag_digest, case_sensitive=False,
-                is_active=True, hidden=False,
+                slug=slug,
+                title=title,
+                category="cracking",
+                description=description,
+                points=points,
+                flag_hash=flag_digest,
+                case_sensitive=False,
+                is_active=True,
+                hidden=False,
             )
         )
     if terminal_missing is not None:

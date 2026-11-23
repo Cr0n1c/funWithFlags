@@ -27,9 +27,14 @@ def webhook_url(settings: Settings) -> str | None:
         return None
     try:
         parts = urlsplit(value)
-        if (parts.scheme == "https" and parts.netloc == "hooks.slack.com"
-                and _PATH.fullmatch(parts.path) and not parts.query and not parts.fragment
-                and not any(ord(c) < 33 or c == "\\" for c in value)):
+        if (
+            parts.scheme == "https"
+            and parts.netloc == "hooks.slack.com"
+            and _PATH.fullmatch(parts.path)
+            and not parts.query
+            and not parts.fragment
+            and not any(ord(c) < 33 or c == "\\" for c in value)
+        ):
             return value
     except ValueError:
         pass
@@ -40,8 +45,12 @@ def webhook_url(settings: Settings) -> str | None:
 def safe_text(value: str, limit: int = 255) -> str:
     """Slack fallback text cannot create markup, mentions, or multiline messages."""
     single = re.sub(r"[\x00-\x1f\x7f-\x9f\s]+", " ", value)[:limit]
-    return (single.replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace("@", "\uff20"))
+    return (
+        single.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("@", "\uff20")
+    )
 
 
 def shell_username(user) -> str:
@@ -54,16 +63,23 @@ def score_message(user, points: int, title: str) -> str:
 
 
 async def enqueue(db: AsyncSession, settings: Settings, key: str, message: str) -> None:
-    """Insert in the caller's award/login transaction, or disable if the table has not been deployed."""
+    """Insert in the caller's award/login transaction.
+
+    Disabled when the table has not been deployed.
+    """
     if webhook_url(settings) is None:
         return
     try:
         # A savepoint prevents a missing table from aborting a committed award.
         async with db.begin_nested():
             await db.execute(select(ActivityOutbox.id).limit(0))
-            db.add(ActivityOutbox(
-                event_key=key, message=message, next_attempt_at=datetime.now(UTC),
-            ))
+            db.add(
+                ActivityOutbox(
+                    event_key=key,
+                    message=message,
+                    next_attempt_at=datetime.now(UTC),
+                )
+            )
             await db.flush()
     except Exception:
         log.warning("activity.outbox_unavailable")
@@ -73,15 +89,28 @@ async def _post(url: str, message: str) -> bool:
     try:
         async with asyncio.timeout(0.85):
             async with httpx.AsyncClient(
-                timeout=httpx.Timeout(0.65), follow_redirects=False, trust_env=False,
+                timeout=httpx.Timeout(0.65),
+                follow_redirects=False,
+                trust_env=False,
             ) as client:
-                response = await client.post(url, json={
-                    "text": message,
-                    "blocks": [{"type": "section", "text": {
-                        "type": "plain_text", "text": message, "emoji": False,
-                    }}],
-                    "unfurl_links": False, "unfurl_media": False,
-                })
+                response = await client.post(
+                    url,
+                    json={
+                        "text": message,
+                        "blocks": [
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "plain_text",
+                                    "text": message,
+                                    "emoji": False,
+                                },
+                            }
+                        ],
+                        "unfurl_links": False,
+                        "unfurl_media": False,
+                    },
+                )
                 return response.status_code == 200
     except (Exception, TimeoutError):
         # Never stringify an exception: HTTP errors may contain the webhook URL.
@@ -99,12 +128,18 @@ async def drain(db: AsyncSession, settings: Settings) -> None:
         return
     try:
         now = datetime.now(UTC)
-        row = (await db.execute(
-            select(ActivityOutbox).where(
-                ActivityOutbox.delivered_at.is_(None),
-                ActivityOutbox.next_attempt_at <= now,
-            ).order_by(ActivityOutbox.id).limit(1).with_for_update(skip_locked=True)
-        )).scalar_one_or_none()
+        row = (
+            await db.execute(
+                select(ActivityOutbox)
+                .where(
+                    ActivityOutbox.delivered_at.is_(None),
+                    ActivityOutbox.next_attempt_at <= now,
+                )
+                .order_by(ActivityOutbox.id)
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            )
+        ).scalar_one_or_none()
         if row is None:
             await db.commit()
             return
@@ -124,7 +159,8 @@ async def drain(db: AsyncSession, settings: Settings) -> None:
 
 
 async def drain_request(
-    session_factory: async_sessionmaker[AsyncSession], settings: Settings,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     """A separate session keeps a delivery failure from expiring auth/scoring objects."""
     if webhook_url(settings) is None:

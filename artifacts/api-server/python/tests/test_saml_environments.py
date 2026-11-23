@@ -1,5 +1,4 @@
 # XML fixtures and PEM environment values are intentionally verbose.
-# ruff: noqa: E501
 from __future__ import annotations
 
 import base64
@@ -133,7 +132,9 @@ def _request_xml_and_verify(location: str, settings: Settings) -> ElementTree.El
     cert = x509.load_pem_x509_certificate(
         settings.saml_sp_cert.get_secret_value().encode(),
     )
-    cert.public_key().verify(signature, signed, padding.PKCS1v15(), hashes.SHA256())
+    key = cert.public_key()
+    assert isinstance(key, rsa.RSAPublicKey)
+    key.verify(signature, signed, padding.PKCS1v15(), hashes.SHA256())
     return request
 
 
@@ -153,7 +154,8 @@ async def _client_and_database(settings: Settings):
         async with (
             httpx.ASGITransport(app=app) as transport,
             httpx.AsyncClient(
-                transport=transport, base_url=settings.app_base_url,
+                transport=transport,
+                base_url=settings.app_base_url,
             ) as client,
             app.router.lifespan_context(app),
         ):
@@ -186,13 +188,18 @@ async def test_environment_metadata_and_signed_login_route(monkeypatch, environm
         assert issuer is not None and issuer.text == settings.saml_sp_entity_id
         relay = parse_qs(urlsplit(login.headers["location"]).query)["RelayState"][0]
         values = ENVIRONMENTS[environment]
-        callback = await client.post("/api/auth/saml/acs", data={
-            "RelayState": relay,
-            "SAMLResponse": assertion(
-                settings, request.get("ID"),
-                signing_key=values["idp_key"], signing_cert=values["idp_cert"],
-            ),
-        })
+        callback = await client.post(
+            "/api/auth/saml/acs",
+            data={
+                "RelayState": relay,
+                "SAMLResponse": assertion(
+                    settings,
+                    request.get("ID"),
+                    signing_key=values["idp_key"],
+                    signing_cert=values["idp_cert"],
+                ),
+            },
+        )
         assert callback.status_code == 303
         assert callback.headers["location"] == settings.app_base_url + "/?auth=ok"
         assert settings.session_cookie_name in callback.cookies
@@ -218,7 +225,10 @@ def test_each_environment_accepts_its_own_signed_assertion(monkeypatch, environm
 )
 @pytest.mark.parametrize("opposite_field", ["issuer", "cert", "audience", "recipient"])
 def test_opposite_environment_values_are_independently_rejected(
-    monkeypatch, target_environment, opposite_environment, opposite_field,
+    monkeypatch,
+    target_environment,
+    opposite_environment,
+    opposite_field,
 ):
     target = _settings(monkeypatch, target_environment)
     opposite = _settings(monkeypatch, opposite_environment)
@@ -274,7 +284,9 @@ async def _assert_http_configuration_failure(settings: Settings):
 @pytest.mark.parametrize("environment", ["development", "production"])
 @pytest.mark.parametrize("missing", REQUIRED_SAML_ENV)
 async def test_missing_active_saml_setting_has_no_prefixed_fallback(
-    monkeypatch, environment, missing,
+    monkeypatch,
+    environment,
+    missing,
 ):
     _settings(monkeypatch, environment)
     plausible = {
@@ -291,14 +303,20 @@ async def test_missing_active_saml_setting_has_no_prefixed_fallback(
     monkeypatch.setenv(missing, "")
 
     settings = Settings()
-    assert getattr(settings, missing.lower()).get_secret_value() == "" if missing == "SAML_IDP_CERT" else getattr(settings, missing.lower()) == ""
+    assert (
+        getattr(settings, missing.lower()).get_secret_value() == ""
+        if missing == "SAML_IDP_CERT"
+        else getattr(settings, missing.lower()) == ""
+    )
     await _assert_http_configuration_failure(settings)
 
 
 @pytest.mark.parametrize("environment", ["development", "production"])
 @pytest.mark.parametrize("certificate", ["SAML_IDP_CERT", "SAML_IDP_ROLLOVER_CERT"])
 async def test_malformed_primary_or_rollover_certificate_fails_closed(
-    monkeypatch, environment, certificate,
+    monkeypatch,
+    environment,
+    certificate,
 ):
     _settings(monkeypatch, environment)
     malformed = "-----BEGIN CERTIFICATE-----\nnot-a-certificate\n-----END CERTIFICATE-----"
@@ -332,7 +350,9 @@ def test_same_environment_rollover_is_accepted(monkeypatch, environment):
     [("development", "production"), ("production", "development")],
 )
 def test_rollover_does_not_implicitly_trust_opposite_environment(
-    monkeypatch, environment, opposite_environment,
+    monkeypatch,
+    environment,
+    opposite_environment,
 ):
     _settings(monkeypatch, environment)
     rollover_cert = {

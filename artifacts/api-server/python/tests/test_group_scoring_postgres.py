@@ -70,15 +70,27 @@ async def test_concurrent_same_user_awards_once(postgres_client, settings):
 
 
 async def test_concurrent_hash_import_does_not_overwrite_or_duplicate(
-    postgres_client, settings, monkeypatch,
+    postgres_client,
+    settings,
+    monkeypatch,
 ):
     db, client = postgres_client
     words = {name: f"offline-race-{name}" for name in ("easy", "medium", "hard")}
-    monkeypatch.setattr(crack_hashes, "PUZZLES", tuple(
-        (f"crack-the-hash-{name}", f"Crack The Hash: {name.title()}", points,
-         "MD5", hashlib.md5(words[name].encode()).hexdigest(), "")
-        for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
-    ))
+    monkeypatch.setattr(
+        crack_hashes,
+        "PUZZLES",
+        tuple(
+            (
+                f"crack-the-hash-{name}",
+                f"Crack The Hash: {name.title()}",
+                points,
+                "MD5",
+                hashlib.md5(words[name].encode()).hexdigest(),
+                "",
+            )
+            for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
+        ),
+    )
     async with db.session_factory() as session:
         operator = await make_user(
             session, username="hash-operator", groups=["funwithflags-admins"]
@@ -88,17 +100,21 @@ async def test_concurrent_hash_import_does_not_overwrite_or_duplicate(
         await session.commit()
         headers = session_cookie(settings, operator)
     terminal_missing = [
-        row["slug"] for row in (await client.get(
-            "/api/flag-admin/import-challenges", headers=headers
-        )).json()["terminal"]
+        row["slug"]
+        for row in (await client.get("/api/flag-admin/import-challenges", headers=headers)).json()[
+            "terminal"
+        ]
     ]
-    responses = await asyncio.gather(*(
-        client.post(
-            "/api/flag-admin/import-challenges",
-            json={**words, "terminal_missing": terminal_missing}, headers=headers,
+    responses = await asyncio.gather(
+        *(
+            client.post(
+                "/api/flag-admin/import-challenges",
+                json={**words, "terminal_missing": terminal_missing},
+                headers=headers,
+            )
+            for _ in range(2)
         )
-        for _ in range(2)
-    ))
+    )
     assert sorted(response.status_code for response in responses) == [200, 409]
     async with db.session_factory() as session:
         assert await session.scalar(select(func.count(Challenge.id))) == 3 + len(terminal_missing)

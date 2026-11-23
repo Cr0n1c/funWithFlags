@@ -1,8 +1,9 @@
 """Offline checks of the release gate; never open a database connection."""
-from copy import deepcopy
+
 import json
-from pathlib import Path
 import subprocess
+from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -13,7 +14,9 @@ from validate_saml_postgres import CASES, EXPECTED, PHASES, PREFIX, gate, succes
 
 def good_result():
     return {
-        "count": 3, "collected": sorted(EXPECTED), "collection_errors": 0,
+        "count": 3,
+        "collected": sorted(EXPECTED),
+        "collection_errors": 0,
         "reports": {node: {phase: ["passed"] for phase in PHASES} for node in EXPECTED},
     }
 
@@ -34,8 +37,13 @@ def test_requires_explicit_approval_and_dedicated_target():
 
 def test_accepts_only_complete_success():
     assert successful(good_result())
-    for key, value in (("count", 0), ("count", 4), ("collected", []),
-                       ("collection_errors", 1), ("reports", {})):
+    for key, value in (
+        ("count", 0),
+        ("count", 4),
+        ("collected", []),
+        ("collection_errors", 1),
+        ("reports", {}),
+    ):
         assert not successful({**good_result(), key: value})
 
 

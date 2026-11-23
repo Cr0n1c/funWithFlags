@@ -27,39 +27,72 @@ async def initialize_missing(db: AsyncSession) -> tuple[int, int]:
         select(Submission.user_id).where(Submission.correct.is_(False)),
     ).subquery()
     group_keys = select(GroupChallengeCredit.group_name.label("group_name")).subquery()
-    users = set((await db.scalars(
-        select(player_keys.c.user_id).distinct()
-        .outerjoin(PlayerScoreboard, PlayerScoreboard.user_id == player_keys.c.user_id)
-        .where(PlayerScoreboard.user_id.is_(None))
-    )).all())
-    groups = set((await db.scalars(
-        select(group_keys.c.group_name).distinct()
-        .outerjoin(GroupScoreboard, GroupScoreboard.group_name == group_keys.c.group_name)
-        .where(GroupScoreboard.group_name.is_(None))
-    )).all())
+    users = set(
+        (
+            await db.scalars(
+                select(player_keys.c.user_id)
+                .distinct()
+                .outerjoin(PlayerScoreboard, PlayerScoreboard.user_id == player_keys.c.user_id)
+                .where(PlayerScoreboard.user_id.is_(None))
+            )
+        ).all()
+    )
+    groups = set(
+        (
+            await db.scalars(
+                select(group_keys.c.group_name)
+                .distinct()
+                .outerjoin(GroupScoreboard, GroupScoreboard.group_name == group_keys.c.group_name)
+                .where(GroupScoreboard.group_name.is_(None))
+            )
+        ).all()
+    )
     solved = (
-        select(Solve.user_id.label("user_id"),
-               func.sum(Solve.points_awarded).label("score"), func.count().label("solves"))
-        .group_by(Solve.user_id).subquery()
+        select(
+            Solve.user_id.label("user_id"),
+            func.sum(Solve.points_awarded).label("score"),
+            func.count().label("solves"),
+        )
+        .group_by(Solve.user_id)
+        .subquery()
     )
-    users |= set((await db.scalars(
-        select(PlayerScoreboard.user_id)
-        .outerjoin(solved, solved.c.user_id == PlayerScoreboard.user_id)
-        .where(or_(PlayerScoreboard.score != func.coalesce(solved.c.score, 0),
-                   PlayerScoreboard.solves != func.coalesce(solved.c.solves, 0)))
-    )).all())
+    users |= set(
+        (
+            await db.scalars(
+                select(PlayerScoreboard.user_id)
+                .outerjoin(solved, solved.c.user_id == PlayerScoreboard.user_id)
+                .where(
+                    or_(
+                        PlayerScoreboard.score != func.coalesce(solved.c.score, 0),
+                        PlayerScoreboard.solves != func.coalesce(solved.c.solves, 0),
+                    )
+                )
+            )
+        ).all()
+    )
     credited = (
-        select(GroupChallengeCredit.group_name.label("group_name"),
-               func.sum(GroupChallengeCredit.points_awarded).label("score"),
-               func.count().label("solves"))
-        .group_by(GroupChallengeCredit.group_name).subquery()
+        select(
+            GroupChallengeCredit.group_name.label("group_name"),
+            func.sum(GroupChallengeCredit.points_awarded).label("score"),
+            func.count().label("solves"),
+        )
+        .group_by(GroupChallengeCredit.group_name)
+        .subquery()
     )
-    groups |= set((await db.scalars(
-        select(GroupScoreboard.group_name)
-        .outerjoin(credited, credited.c.group_name == GroupScoreboard.group_name)
-        .where(or_(GroupScoreboard.score != func.coalesce(credited.c.score, 0),
-                   GroupScoreboard.solves != func.coalesce(credited.c.solves, 0)))
-    )).all())
+    groups |= set(
+        (
+            await db.scalars(
+                select(GroupScoreboard.group_name)
+                .outerjoin(credited, credited.c.group_name == GroupScoreboard.group_name)
+                .where(
+                    or_(
+                        GroupScoreboard.score != func.coalesce(credited.c.score, 0),
+                        GroupScoreboard.solves != func.coalesce(credited.c.solves, 0),
+                    )
+                )
+            )
+        ).all()
+    )
     if users or groups:
         await refresh_affected(db, users, groups)
     return len(users), len(groups)
@@ -68,15 +101,27 @@ async def initialize_missing(db: AsyncSession) -> tuple[int, int]:
 async def refresh_player(db: AsyncSession, user_id: int) -> None:
     await db.flush()
     awards = (
-        select(Solve.points_awarded.label("points"), Solve.solved_at.label("at"))
-        .where(Solve.user_id == user_id)
+        select(Solve.points_awarded.label("points"), Solve.solved_at.label("at")).where(
+            Solve.user_id == user_id
+        )
     ).subquery()
-    total, count, last = (await db.execute(select(
-        func.coalesce(func.sum(awards.c.points), 0), func.count(), func.max(awards.c.at),
-    ))).one()
-    failed = (await db.execute(select(func.count(Submission.id)).where(
-        Submission.user_id == user_id, Submission.correct.is_(False),
-    ))).scalar_one()
+    total, count, last = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(awards.c.points), 0),
+                func.count(),
+                func.max(awards.c.at),
+            )
+        )
+    ).one()
+    failed = (
+        await db.execute(
+            select(func.count(Submission.id)).where(
+                Submission.user_id == user_id,
+                Submission.correct.is_(False),
+            )
+        )
+    ).scalar_one()
     row = await db.get(PlayerScoreboard, user_id)
     if row is None:
         row = PlayerScoreboard(user_id=user_id)
@@ -88,13 +133,20 @@ async def refresh_player(db: AsyncSession, user_id: int) -> None:
 async def refresh_group(db: AsyncSession, name: str) -> None:
     await db.flush()
     awards = (
-        select(GroupChallengeCredit.points_awarded.label("points"),
-               GroupChallengeCredit.awarded_at.label("at"))
-        .where(GroupChallengeCredit.group_name == name)
+        select(
+            GroupChallengeCredit.points_awarded.label("points"),
+            GroupChallengeCredit.awarded_at.label("at"),
+        ).where(GroupChallengeCredit.group_name == name)
     ).subquery()
-    total, count, last = (await db.execute(select(
-        func.coalesce(func.sum(awards.c.points), 0), func.count(), func.max(awards.c.at),
-    ))).one()
+    total, count, last = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(awards.c.points), 0),
+                func.count(),
+                func.max(awards.c.at),
+            )
+        )
+    ).one()
     row = await db.get(GroupScoreboard, name)
     if count == 0:
         if row is not None:
@@ -107,7 +159,9 @@ async def refresh_group(db: AsyncSession, name: str) -> None:
 
 
 async def refresh_affected(
-    db: AsyncSession, users: set[int], groups: set[str],
+    db: AsyncSession,
+    users: set[int],
+    groups: set[str],
 ) -> None:
     # Serialize projection updates *before* reading ledger totals. Otherwise two
     # independent award transactions can overwrite one another's snapshot.

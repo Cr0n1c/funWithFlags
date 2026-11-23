@@ -1,6 +1,5 @@
 """Data migration cannot change unrelated Gold rows or earned scores."""
 
-
 import pytest
 from sqlalchemy import event, select
 
@@ -16,14 +15,24 @@ async def test_talks_category_preserves_flags_scores_and_customized_records(sett
         rows = []
         for day in ("02", "09", "16"):
             row = await make_challenge(
-                session, settings, slug=f"talk-demo-day-2026-10-{day}",
-                flag=f"synthetic-talk-{day}", category="gold", points=500,
+                session,
+                settings,
+                slug=f"talk-demo-day-2026-10-{day}",
+                flag=f"synthetic-talk-{day}",
+                category="gold",
+                points=500,
             )
             row.title = f"Talk: Demo Day 10/{day}"
             row.description = f"Gave a security related talk on Weekly Demos 10/{day}/2026"
             rows.append(row)
-        other = await make_challenge(session, settings, slug="unrelated-talk",
-                                     flag="synthetic-other", category="gold", points=500)
+        other = await make_challenge(
+            session,
+            settings,
+            slug="unrelated-talk",
+            flag="synthetic-other",
+            category="gold",
+            points=500,
+        )
         other.title, other.description = rows[0].title, rows[0].description
         session.add(Solve(user_id=owner.id, challenge_id=rows[0].id, points_awarded=500))
         await session.commit()
@@ -38,7 +47,9 @@ async def test_talks_category_preserves_flags_scores_and_customized_records(sett
         assert [row.points for row in rows] == [500] * 3
         await session.refresh(other)
         assert other.category == "gold"
-        award = (await session.execute(select(Solve).where(Solve.challenge_id == ids[0]))).scalar_one()
+        award = (
+            await session.execute(select(Solve).where(Solve.challenge_id == ids[0]))
+        ).scalar_one()
         assert award.points_awarded == 500
         # An administrator's later categorization is not overwritten on restart.
         rows[0].category = "Custom"
@@ -49,14 +60,19 @@ async def test_talks_category_preserves_flags_scores_and_customized_records(sett
 
 
 async def test_startup_normalizes_exact_legacy_rows_in_one_transaction_and_is_idempotent(
-    settings, database,
+    settings,
+    database,
 ):
     async with database.session_factory() as session:
         owner = await make_user(session)
         puzzle_ids = []
         for slug, title, points, algorithm, digest, hint in PUZZLES:
             row = await make_challenge(
-                session, settings, slug=slug, flag=f"secret-{slug}", category="gold",
+                session,
+                settings,
+                slug=slug,
+                flag=f"secret-{slug}",
+                category="gold",
                 points=points,
             )
             row.title = title
@@ -67,8 +83,12 @@ async def test_startup_normalizes_exact_legacy_rows_in_one_transaction_and_is_id
         for suffix in ("different-slug", "different-description", "case-sensitive", "hidden"):
             slug, title, points, algorithm, digest, hint = PUZZLES[0]
             row = await make_challenge(
-                session, settings, slug=f"{slug}-{suffix}", flag=f"secret-{suffix}",
-                category="gold", points=points,
+                session,
+                settings,
+                slug=f"{slug}-{suffix}",
+                flag=f"secret-{suffix}",
+                category="gold",
+                points=points,
             )
             row.title = title
             row.description = puzzle_description(algorithm, digest, hint)
@@ -99,9 +119,14 @@ async def test_startup_normalizes_exact_legacy_rows_in_one_transaction_and_is_id
         # A second startup transaction cannot recategorize or disturb migrated rows.
         async with database.session_factory() as session:
             assert await normalize_hash_categories(session) == 0
-            assert {row.id for row in (
-                await session.execute(select(Challenge).where(Challenge.category == "cracking"))
-            ).scalars().all()} == set(puzzle_ids)
+            assert {
+                row.id
+                for row in (
+                    await session.execute(select(Challenge).where(Challenge.category == "cracking"))
+                )
+                .scalars()
+                .all()
+            } == set(puzzle_ids)
     event.remove(database.engine.sync_engine, "before_cursor_execute", record_update)
 
 
@@ -113,8 +138,12 @@ async def test_startup_leaves_mismatched_fingerprint_untouched(settings, databas
     async with database.session_factory() as session:
         slug, title, points, algorithm, digest, hint = PUZZLES[0]
         row = await make_challenge(
-            session, settings, slug=slug, flag="a-different-answer",
-            category="gold", points=points,
+            session,
+            settings,
+            slug=slug,
+            flag="a-different-answer",
+            category="gold",
+            points=points,
         )
         row.title = title
         row.description = puzzle_description(algorithm, digest, hint)

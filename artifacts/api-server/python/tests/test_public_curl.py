@@ -10,14 +10,17 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
 
 from app import public_curl as curl
+from app.crack_hashes import normalize_hash_categories
 from app.curl_limits import CurlQuotaExceeded, PlayerCurlLimiter
+from app.imds_fixture import METADATA, ROLE
 from app.terminal_challenges import prepare_terminal_challenges, terminal_status
-from tests.conftest import make_user, session_cookie
+from tests.conftest import make_challenge, make_user, session_cookie
 
 run_real_worker = curl._run_worker
 real_popen = subprocess.Popen
@@ -31,20 +34,24 @@ def isolated_curl_limits(monkeypatch):
     # Process-lifecycle tests below restore the real supervisor and exec an
     # offline fixture that patches DNS and sockets inside the child itself.
     monkeypatch.setattr(
-        curl, "_run_worker", lambda raw: curl._fetch_transport(*curl._parse_url(raw)),
+        curl,
+        "_run_worker",
+        lambda raw: curl._fetch_transport(*curl._parse_url(raw)),
     )
     # Tests must explicitly supply synthetic DNS results; never resolve a real
     # target, including IMDS and private addresses.
     monkeypatch.setattr(socket, "getaddrinfo", Mock(side_effect=AssertionError("No real DNS")))
     monkeypatch.setattr(
-        curl.subprocess, "Popen", Mock(side_effect=AssertionError("No unmocked child network")),
+        curl.subprocess,
+        "Popen",
+        Mock(side_effect=AssertionError("No unmocked child network")),
     )
 
 
 @pytest.fixture
 def subprocess_workers(monkeypatch, tmp_path):
     """Use real exec/IPC/kill/reap, with only child network calls replaced."""
-    state = {"mode": "success", "children": [], "markers": []}
+    state: dict[str, Any] = {"mode": "success", "children": [], "markers": []}
 
     def launch(command, **kwargs):
         assert command == [sys.executable, "-E", "-m", "app.public_curl_worker"]
@@ -73,8 +80,6 @@ def subprocess_workers(monkeypatch, tmp_path):
 
 
 def assert_workers_reaped(state):
-    import os
-
     for process in state["children"]:
         assert process.returncode is not None
         assert process.stdin.closed and process.stdout.closed
@@ -84,15 +89,21 @@ def assert_workers_reaped(state):
 
 async def wait_for_stalled_workers(state, count):
     async def ready():
-        while len(state["markers"]) < count or not all(p.exists() for p in state["markers"]):
+        # Polls state owned by another process or connection; there is no event to await.
+        while len(state["markers"]) < count or not all(p.exists() for p in state["markers"]):  # noqa: ASYNC110
             await asyncio.sleep(0.01)
+
     await asyncio.wait_for(ready(), timeout=curl.WORKER_TIMEOUT - 1)
 
 
-@pytest.mark.parametrize("url", [
-    "169.254.169.254", "http://169.254.169.254/latest/meta-data/",
-    "https://169.254.169.254/",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "169.254.169.254",
+        "http://169.254.169.254/latest/meta-data/",
+        "https://169.254.169.254/",
+    ],
+)
 def test_imds_is_fixture_only(monkeypatch, url):
     dns = Mock(side_effect=AssertionError("No network allowed"))
     monkeypatch.setattr(socket, "getaddrinfo", dns)
@@ -101,16 +112,16 @@ def test_imds_is_fixture_only(monkeypatch, url):
 
 
 def test_imds_browsable_tree_and_only_role_credentials_reveal_flag(monkeypatch):
-    import json
-    from app.imds_fixture import ROLE, METADATA
     dns = Mock(side_effect=AssertionError("No DNS allowed"))
     sockets = Mock(side_effect=AssertionError("No sockets allowed"))
     monkeypatch.setattr(socket, "getaddrinfo", dns)
     monkeypatch.setattr(socket, "socket", sockets)
+
     def get(path):
         output = curl.fetch_public("http://169.254.169.254" + path)
         assert len(output) <= 500
         return output
+
     assert "latest" in get("/")
     assert "meta-data/" in get("/latest/")
     assert "iam/" in get("/latest/meta-data/")
@@ -118,7 +129,9 @@ def test_imds_browsable_tree_and_only_role_credentials_reveal_flag(monkeypatch):
     assert get("/latest/meta-data/iam/security-credentials/").strip() == ROLE
     for version in ("latest", "1.0", "2021-07-15"):
         for suffix in ("", "/"):
-            assert json.loads(get(f"/{version}/meta-data/iam/security-credentials/{ROLE}{suffix}")) == {"flag": curl.FLAG}
+            assert json.loads(
+                get(f"/{version}/meta-data/iam/security-credentials/{ROLE}{suffix}")
+            ) == {"flag": curl.FLAG}
     for path in METADATA:
         assert curl.FLAG not in get("/latest/meta-data/" + path)
     assert "accountId" in get("/latest/dynamic/instance-identity/document")
@@ -129,13 +142,30 @@ def test_imds_browsable_tree_and_only_role_credentials_reveal_flag(monkeypatch):
     sockets.assert_not_called()
 
 
-@pytest.mark.parametrize("ip", [
-    "127.0.0.1", "10.0.0.1", "172.16.0.1", "192.168.0.1",
-    "169.254.169.254", "100.64.0.1", "0.0.0.0", "224.0.0.1",
-    "::1", "fe80::1", "fc00::1", "::ffff:127.0.0.1", "64:ff9b::7f00:1",
-])
+@pytest.mark.parametrize(
+    "ip",
+    [
+        "127.0.0.1",
+        "10.0.0.1",
+        "172.16.0.1",
+        "192.168.0.1",
+        "169.254.169.254",
+        "100.64.0.1",
+        "0.0.0.0",
+        "224.0.0.1",
+        "::1",
+        "fe80::1",
+        "fc00::1",
+        "::ffff:127.0.0.1",
+        "64:ff9b::7f00:1",
+    ],
+)
 def test_internal_resolution_blocked(monkeypatch, ip):
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 80))])
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 80))],
+    )
     connect = Mock(side_effect=AssertionError("Never connect"))
     monkeypatch.setattr(socket, "socket", connect)
     with pytest.raises(ValueError):
@@ -143,21 +173,32 @@ def test_internal_resolution_blocked(monkeypatch, ip):
     connect.assert_not_called()
 
 
-@pytest.mark.parametrize("url", [
-    "file:///etc/passwd", "ftp://example.com/", "http://user:pass@example.com",
-    "http://example.com:8080", "http://example.com/\r\nHost: localhost",
-    "http://[fe80::1%25eth0]/", "http://example.com\\@127.0.0.1",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "file:///etc/passwd",
+        "ftp://example.com/",
+        "http://user:pass@example.com",
+        "http://example.com:8080",
+        "http://example.com/\r\nHost: localhost",
+        "http://[fe80::1%25eth0]/",
+        "http://example.com\\@127.0.0.1",
+    ],
+)
 def test_unsafe_url_rejected(url):
     with pytest.raises(ValueError):
         curl.fetch_public(url)
 
 
 def test_mixed_public_private_dns_is_rejected(monkeypatch):
-    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [
-        (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 80))
-        for ip in ("93.184.216.34", "10.0.0.1")
-    ])
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *a, **k: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 80))
+            for ip in ("93.184.216.34", "10.0.0.1")
+        ],
+    )
     connect = Mock(side_effect=AssertionError("Never connect"))
     monkeypatch.setattr(socket, "socket", connect)
     with pytest.raises(ValueError, match="public"):
@@ -197,28 +238,40 @@ async def test_route_auth_and_scorable_puzzle(client, session, settings):
     headers = session_cookie(settings, user)
     root = await client.post("/api/cli/curl", json={"url": "169.254.169.254"}, headers=headers)
     assert "latest" in root.json()["output"] and curl.FLAG not in root.json()["output"]
-    result = await client.post("/api/cli/curl", json={
-        "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/ctf-instance-role",
-    }, headers=headers)
+    result = await client.post(
+        "/api/cli/curl",
+        json={
+            "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/ctf-instance-role",
+        },
+        headers=headers,
+    )
     assert result.status_code == 200
     assert curl.FLAG in result.json()["output"]
-    assert (await client.post("/api/cli/curl", json={
-        "url": "169.254.169.254", "method": "POST",
-    }, headers=headers)).status_code == 422
+    assert (
+        await client.post(
+            "/api/cli/curl",
+            json={
+                "url": "169.254.169.254",
+                "method": "POST",
+            },
+            headers=headers,
+        )
+    ).status_code == 422
     missing = {r["slug"] for r in await terminal_status(session, settings) if r["missing"]}
     session.add_all(await prepare_terminal_challenges(session, settings, missing))
     await session.commit()
-    submission = await client.post("/api/challenges/submit", json={"flag": curl.FLAG}, headers=headers)
+    submission = await client.post(
+        "/api/challenges/submit", json={"flag": curl.FLAG}, headers=headers
+    )
     assert submission.status_code == 200
     assert submission.json()["correct"] and submission.json()["points_awarded"] == 125
 
 
 @pytest.mark.parametrize("customized", [False, True])
 async def test_existing_metadata_correction_preserves_record(client, session, settings, customized):
-    from app.crack_hashes import normalize_hash_categories
-    from tests.conftest import make_challenge
-    row = await make_challenge(session, settings, slug=curl.PUZZLE[0],
-                               flag=curl.FLAG, points=150, category="OWASP")
+    row = await make_challenge(
+        session, settings, slug=curl.PUZZLE[0], flag=curl.FLAG, points=150, category="OWASP"
+    )
     row.title = "Custom title" if customized else "A request in the wrong direction"
     row.description = curl.PUZZLE[2]
     await session.commit()
@@ -287,7 +340,10 @@ def test_parallel_admission_is_atomic():
 
 
 async def test_route_quota_uses_authenticated_account_and_recovers(
-    client, session, settings, monkeypatch,
+    client,
+    session,
+    settings,
+    monkeypatch,
 ):
     now = [0.0]
     monkeypatch.setattr(curl, "PLAYER_LIMITS", PlayerCurlLimiter(clock=lambda: now[0]))
@@ -314,19 +370,27 @@ async def test_route_quota_uses_authenticated_account_and_recovers(
     assert rejected.json() == {"detail": "curl: too many requests; try again shortly"}
     assert fetch.call_count == 10
     spoofed = await client.post(
-        "/api/cli/curl", json={**payload, "user_id": bob.id}, headers=alice_headers,
+        "/api/cli/curl",
+        json={**payload, "user_id": bob.id},
+        headers=alice_headers,
     )
     assert spoofed.status_code == 422
-    assert (await client.post("/api/cli/curl", json=payload, headers=bob_headers)).status_code == 200
+    assert (
+        await client.post("/api/cli/curl", json=payload, headers=bob_headers)
+    ).status_code == 200
     now[0] = 60
-    assert (await client.post("/api/cli/curl", json=payload, headers=alice_headers)).status_code == 200
+    assert (
+        await client.post("/api/cli/curl", json=payload, headers=alice_headers)
+    ).status_code == 200
     assert fetch.call_count == 12
 
 
 @pytest.mark.parametrize("interruption", ["cancel", "timeout"])
 @pytest.mark.parametrize("worker_fails", [False, True])
 async def test_interrupted_wait_keeps_slot_until_worker_exits(
-    monkeypatch, interruption, worker_fails,
+    monkeypatch,
+    interruption,
+    worker_fails,
 ):
     now = [0.0]
     limits = PlayerCurlLimiter(clock=lambda: now[0])
@@ -445,7 +509,9 @@ async def test_interrupted_queued_work_keeps_account_admission(monkeypatch, inte
                 request.cancel()
             await asyncio.wait_for(
                 asyncio.gather(
-                    blocker, *futures, *([request] if request is not None else []),
+                    blocker,
+                    *futures,
+                    *([request] if request is not None else []),
                     return_exceptions=True,
                 ),
                 timeout=3,
@@ -456,9 +522,13 @@ async def test_interrupted_queued_work_keeps_account_admission(monkeypatch, inte
         fetch.assert_called_once_with("queued")
         assert limits._players[1].active == 0
         assert curl.PLAYER_LIMITS is limits
-        assert await asyncio.wait_for(
-            curl.fetch_for_player("recovered", 1), timeout=2,
-        ) == "synthetic queued response"
+        assert (
+            await asyncio.wait_for(
+                curl.fetch_for_player("recovered", 1),
+                timeout=2,
+            )
+            == "synthetic queued response"
+        )
         assert len(futures) == 2
         assert limits._players[1].active == 0
         assert fetch.call_count == 2
@@ -467,7 +537,12 @@ async def test_interrupted_queued_work_keeps_account_admission(monkeypatch, inte
 
 @pytest.mark.parametrize("failure,status", [(ValueError, 400), (OSError, 502)])
 async def test_worker_errors_release_slot_and_hide_details(
-    client, session, settings, monkeypatch, failure, status,
+    client,
+    session,
+    settings,
+    monkeypatch,
+    failure,
+    status,
 ):
     fetch = Mock(side_effect=failure("https://secret:credential@example.com/private response"))
     monkeypatch.setattr(curl, "fetch_public", fetch)
@@ -477,7 +552,9 @@ async def test_worker_errors_release_slot_and_hide_details(
     assert "secret" not in response.text and "private" not in response.text
     fetch.side_effect = None
     fetch.return_value = "ok"
-    assert (await client.post("/api/cli/curl", json={"url": "example.com"}, headers=headers)).status_code == 200
+    assert (
+        await client.post("/api/cli/curl", json={"url": "example.com"}, headers=headers)
+    ).status_code == 200
 
 
 async def test_executor_submission_failure_releases_player(monkeypatch):
@@ -499,15 +576,22 @@ def test_global_slots_still_bound_public_fetches_but_not_offline_imds(monkeypatc
     with pytest.raises(ValueError, match="busy"):
         curl.fetch_public("https://example.com")
     assert "latest" in curl.fetch_public("169.254.169.254")
-    socket.getaddrinfo.assert_not_called()
+    # The autouse fixture replaced DNS resolution with a mock.
+    cast(Mock, socket.getaddrinfo).assert_not_called()
     for _ in range(4):
         slots.release()
 
 
 def test_tls_uses_default_verification_and_original_host(monkeypatch):
-    monkeypatch.setattr(socket, "getaddrinfo", Mock(return_value=[
-        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
-    ]))
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        Mock(
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443)),
+            ]
+        ),
+    )
     sock = Mock()
     monkeypatch.setattr(socket, "socket", Mock(return_value=sock))
     context = Mock()
@@ -528,29 +612,56 @@ def test_tls_uses_default_verification_and_original_host(monkeypatch):
 
 @pytest.mark.parametrize("scheme", ["http", "https"])
 async def test_worker_environment_excludes_parent_secrets_and_overrides(
-    subprocess_workers, monkeypatch, tmp_path, scheme, capsys, caplog,
+    subprocess_workers,
+    monkeypatch,
+    tmp_path,
+    scheme,
+    capsys,
+    caplog,
 ):
     # Only synthetic values, with no settings lookup or credential access.
     for name in (
-        "DATABASE_URL", "SESSION_SECRET", "FLAG_HASH_SECRET",
-        "OKTA_CLIENT_ID", "OKTA_CLIENT_SECRET", "OKTA_ISSUER",
-        "SLACK_ACTIVITY_WEBHOOK_URL", "UNRECOGNIZED_FUTURE_SECRET",
-        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
-        "http_proxy", "https_proxy", "all_proxy", "no_proxy",
-        "PYTHONHOME", "PYTHONPATH", "PYTHONSTARTUP", "PYTHONUSERBASE",
-        "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
-        "LD_PRELOAD", "LD_LIBRARY_PATH", "PATH", "HOME",
+        "DATABASE_URL",
+        "SESSION_SECRET",
+        "FLAG_HASH_SECRET",
+        "OKTA_CLIENT_ID",
+        "OKTA_CLIENT_SECRET",
+        "OKTA_ISSUER",
+        "SLACK_ACTIVITY_WEBHOOK_URL",
+        "UNRECOGNIZED_FUTURE_SECRET",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+        "PYTHONUSERBASE",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "PATH",
+        "HOME",
     ):
         monkeypatch.setenv(name, str(tmp_path / "synthetic-nonexistent-override"))
     state = subprocess_workers
     state["mode"] = "environment"
-    assert await curl.fetch_for_player(f"{scheme}://synthetic.example", 1) == "synthetic safe output"
+    assert (
+        await curl.fetch_for_player(f"{scheme}://synthetic.example", 1) == "synthetic safe output"
+    )
     facts = json.loads(state["markers"][0].read_text())
     assert facts["minimal_environment"]
     assert facts["python_overrides_ignored"]
     assert facts["hostname_verification"]
     assert facts["certificate_verification"]
-    assert facts["trusted_ca_count"] > 0
+    assert facts["trusted_ca_count"] > 0 or facts["trusted_ca_directory"]
     assert_workers_reaped(state)
     assert curl.PLAYER_LIMITS._players[1].active == 0
     captured = capsys.readouterr()
@@ -559,7 +670,10 @@ async def test_worker_environment_excludes_parent_secrets_and_overrides(
 
 @pytest.mark.parametrize("scheme", ["http", "https"])
 async def test_worker_cannot_access_inheritable_parent_descriptor(
-    subprocess_workers, scheme, capsys, caplog,
+    subprocess_workers,
+    scheme,
+    capsys,
+    caplog,
 ):
     # A pipe contains only synthetic bytes: no application files or sockets.
     read_fd, write_fd = os.pipe()
@@ -577,9 +691,13 @@ async def test_worker_cannot_access_inheritable_parent_descriptor(
         state["mode"] = f"descriptor:{probe_fd}"
         # The fixture forwards production Popen kwargs unchanged: do not set
         # close_fds here, or the test would hide a production inheritance leak.
-        assert await curl.fetch_for_player(
-            f"{scheme}://synthetic.example", 1,
-        ) == "synthetic safe output"
+        assert (
+            await curl.fetch_for_player(
+                f"{scheme}://synthetic.example",
+                1,
+            )
+            == "synthetic safe output"
+        )
         assert len(state["children"]) == 1
         facts = json.loads(state["markers"][0].read_text())
         assert facts == {"descriptor_errno": errno.EBADF}
@@ -600,7 +718,10 @@ async def test_worker_cannot_access_inheritable_parent_descriptor(
 
 @pytest.mark.parametrize("stage", ["dns", "connect", "tls", "headers", "body", "cleanup"])
 async def test_whole_worker_deadline_kills_stalled_stage_and_recovers(
-    subprocess_workers, stage, caplog, capsys,
+    subprocess_workers,
+    stage,
+    caplog,
+    capsys,
 ):
     state = subprocess_workers
     state["mode"] = stage
@@ -645,8 +766,10 @@ async def test_all_stalled_dns_slots_recover_even_after_waiters_leave(subprocess
         assert all(isinstance(result, TimeoutError) for result in results)
 
         async def all_released():
-            while any(curl.PLAYER_LIMITS._players[user_id].active for user_id in range(1, 5)):
+            # Polls state owned by another process or connection; there is no event to await.
+            while any(curl.PLAYER_LIMITS._players[user_id].active for user_id in range(1, 5)):  # noqa: ASYNC110
                 await asyncio.sleep(0.01)
+
         await asyncio.wait_for(all_released(), timeout=3)
         assert_workers_reaped(state)
         # All four global permits, not just one, are available again.
@@ -657,17 +780,30 @@ async def test_all_stalled_dns_slots_recover_even_after_waiters_leave(subprocess
             curl.SLOTS.release()
         state["mode"] = "success"
         for user_id in range(1, 6):
-            assert await curl.fetch_for_player("https://synthetic.example", user_id) == "synthetic safe output"
+            assert (
+                await curl.fetch_for_player("https://synthetic.example", user_id)
+                == "synthetic safe output"
+            )
         assert_workers_reaped(state)
     finally:
         await asyncio.gather(*requests, return_exceptions=True)
 
 
-@pytest.mark.parametrize("mode,error", [
-    ("dns-error", OSError), ("crash", OSError), ("malformed", OSError), ("mixed", ValueError),
-])
+@pytest.mark.parametrize(
+    "mode,error",
+    [
+        ("dns-error", OSError),
+        ("crash", OSError),
+        ("malformed", OSError),
+        ("mixed", ValueError),
+    ],
+)
 async def test_child_failure_reaps_worker_and_releases_capacity(
-    subprocess_workers, mode, error, capsys, caplog,
+    subprocess_workers,
+    mode,
+    error,
+    capsys,
+    caplog,
 ):
     state = subprocess_workers
     state["mode"] = mode
@@ -684,16 +820,19 @@ async def test_child_failure_reaps_worker_and_releases_capacity(
 
 
 async def test_repeated_child_failures_keep_parent_descriptors_stable(
-    subprocess_workers, capsys, caplog,
+    subprocess_workers,
+    capsys,
+    caplog,
 ):
     state = subprocess_workers
     url = "https://synthetic.example"
 
     def descriptor_count():
-        # Count Linux procfs entry names only. Never follow descriptor symlinks,
-        # open their targets, or inspect/read inherited application resources.
-        # listdir closes its own directory descriptor before returning.
-        return len(os.listdir("/proc/self/fd"))
+        # Count descriptor entry names only (procfs on Linux, /dev/fd elsewhere).
+        # Never follow descriptor symlinks, open their targets, or inspect/read
+        # inherited application resources. listdir closes its own directory
+        # descriptor before returning.
+        return len(os.listdir("/proc/self/fd" if os.path.isdir("/proc/self/fd") else "/dev/fd"))
 
     def assert_capacity_and_cleanup():
         # Keep Popen objects alive in state: GC must not hide missing cleanup.
@@ -748,15 +887,23 @@ async def test_repeated_child_failures_keep_parent_descriptors_stable(
     assert not captured.out and not captured.err and not caplog.text
 
 
-@pytest.mark.parametrize("interruption,interrupt_at", [
-    pytest.param(None, None, id="retained"),
-    pytest.param("cancel", 0, id="cancel-before-kill"),
-    pytest.param("timeout", 0, id="timeout-before-kill"),
-    pytest.param("cancel", 1, id="cancel-before-reap"),
-    pytest.param("timeout", 1, id="timeout-before-reap"),
-])
+@pytest.mark.parametrize(
+    "interruption,interrupt_at",
+    [
+        pytest.param(None, None, id="retained"),
+        pytest.param("cancel", 0, id="cancel-before-kill"),
+        pytest.param("timeout", 0, id="timeout-before-kill"),
+        pytest.param("cancel", 1, id="cancel-before-reap"),
+        pytest.param("timeout", 1, id="timeout-before-reap"),
+    ],
+)
 async def test_parent_communicate_failure_reaps_worker_and_releases_both_limits(
-    subprocess_workers, monkeypatch, capsys, caplog, interruption, interrupt_at,
+    subprocess_workers,
+    monkeypatch,
+    capsys,
+    caplog,
+    interruption,
+    interrupt_at,
 ):
     state = subprocess_workers
     url = "https://synthetic.example"
@@ -804,6 +951,7 @@ async def test_parent_communicate_failure_reaps_worker_and_releases_both_limits(
             # received a request or EOF. Leave both pipes open so production
             # cleanup, not the injection or fixture teardown, must close them.
             assert process.poll() is None
+            assert process.stdin is not None and process.stdout is not None
             assert not process.stdin.closed and not process.stdout.closed
             assert curl.PLAYER_LIMITS._players[1].active == 1
             raise failure
@@ -818,7 +966,9 @@ async def test_parent_communicate_failure_reaps_worker_and_releases_both_limits(
         patch.setattr(curl.subprocess, "Popen", launch_with_broken_communication)
         request = asyncio.create_task(curl.fetch_for_player(url, 1))
         try:
-            for stage, (started, allowed) in enumerate(zip(cleanup_started, cleanup_allowed)):
+            for stage, (started, allowed) in enumerate(
+                zip(cleanup_started, cleanup_allowed, strict=True)
+            ):
                 await asyncio.wait_for(started.wait(), timeout=cleanup_timeout)
                 if stage == interrupt_at:
                     assert not request.done()
@@ -838,6 +988,7 @@ async def test_parent_communicate_failure_reaps_worker_and_releases_both_limits(
                 # Do not poll/waitpid here: that could reap the killed child
                 # on behalf of production and hide an ordering regression.
                 assert process.returncode is None
+                assert process.stdin is not None and process.stdout is not None
                 assert not process.stdin.closed and not process.stdout.closed
                 assert curl.PLAYER_LIMITS._players[1].active == 1
                 with pytest.raises(CurlQuotaExceeded):
@@ -923,19 +1074,26 @@ async def test_process_start_failure_releases_both_limits(subprocess_workers, mo
 
 
 async def test_worker_deadline_route_error_is_sanitized_and_recovers(
-    client, session, settings, subprocess_workers,
+    client,
+    session,
+    settings,
+    subprocess_workers,
 ):
     headers = session_cookie(settings, await make_user(session))
     subprocess_workers["mode"] = "dns"
     response = await client.post(
-        "/api/cli/curl", json={"url": "https://synthetic.example/private-query"}, headers=headers,
+        "/api/cli/curl",
+        json={"url": "https://synthetic.example/private-query"},
+        headers=headers,
     )
     assert response.status_code == 502
     assert response.json() == {"detail": "curl: request failed or timed out"}
     assert_workers_reaped(subprocess_workers)
     subprocess_workers["mode"] = "success"
     response = await client.post(
-        "/api/cli/curl", json={"url": "https://synthetic.example"}, headers=headers,
+        "/api/cli/curl",
+        json={"url": "https://synthetic.example"},
+        headers=headers,
     )
     assert response.status_code == 200 and response.json()["output"] == "synthetic safe output"
     assert_workers_reaped(subprocess_workers)

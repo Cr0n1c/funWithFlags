@@ -21,7 +21,9 @@ async def test_stats_permissions(client, settings, session):
 
 async def test_stats_zero_activity(client, settings, session):
     admin = await make_user(session, is_admin=True)
-    data = (await client.get("/api/admin/user-stats", headers=session_cookie(settings, admin))).json()
+    data = (
+        await client.get("/api/admin/user-stats", headers=session_cookie(settings, admin))
+    ).json()
     assert data["people_logged_in"] == 0
     assert data["people_with_points"] == 0
     assert data["average_daily_logins"] == 0
@@ -36,10 +38,12 @@ async def test_stats_unique_days_boundaries_and_positive_scores(client, settings
     end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     start = end - timedelta(days=30)
     person.last_login_at = end
-    session.add_all([
-        PlayerScoreboard(user_id=person.id, score=25, solves=1, failed_attempts=0),
-        PlayerScoreboard(user_id=never_logged_in.id, score=0, solves=1, failed_attempts=0),
-    ])
+    session.add_all(
+        [
+            PlayerScoreboard(user_id=person.id, score=25, solves=1, failed_attempts=0),
+            PlayerScoreboard(user_id=never_logged_in.id, score=0, solves=1, failed_attempts=0),
+        ]
+    )
     for user_id, when, kind in [
         (person.id, start, "saml.login"),
         (person.id, start + timedelta(hours=1), "saml.login"),  # Deduplicated.
@@ -62,4 +66,6 @@ async def test_stats_unique_days_boundaries_and_positive_scores(client, settings
     # Group access is evaluated on every request, not cached by the command.
     admin.groups = []
     await session.commit()
-    assert (await client.get("/api/admin/user-stats", headers=session_cookie(settings, admin))).status_code == 403
+    assert (
+        await client.get("/api/admin/user-stats", headers=session_cookie(settings, admin))
+    ).status_code == 403

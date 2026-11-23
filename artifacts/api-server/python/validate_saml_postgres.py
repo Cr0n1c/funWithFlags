@@ -1,10 +1,11 @@
 """Fail-closed, secret-safe entry point for the separately approved PostgreSQL job."""
+
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 CASES = ("jit", "transaction_replay", "assertion_replay")
 PREFIX = "tests/test_saml_postgres.py::test_concurrent_saml_postgres"
@@ -36,12 +37,16 @@ class Results:
 
     def pytest_sessionfinish(self, session, exitstatus):
         # Record only known IDs, plus counts to catch missing or unexpected tests.
-        self.path.write_text(json.dumps({
-            "collected": sorted(set(self.collected) & EXPECTED),
-            "count": len(self.collected),
-            "collection_errors": self.collection_errors,
-            "reports": self.reports,
-        }))
+        self.path.write_text(
+            json.dumps(
+                {
+                    "collected": sorted(set(self.collected) & EXPECTED),
+                    "count": len(self.collected),
+                    "collection_errors": self.collection_errors,
+                    "reports": self.reports,
+                }
+            )
+        )
 
 
 def successful(result):
@@ -52,7 +57,8 @@ def successful(result):
         and set(result.get("reports", {})) == EXPECTED
         and all(
             result["reports"][node].get(phase) == ["passed"]
-            for node in EXPECTED for phase in PHASES
+            for node in EXPECTED
+            for phase in PHASES
         )
     )
 
@@ -78,24 +84,32 @@ def main():
     for key in list(env):
         if key.startswith(("PYTEST_", "DB_")) or key == "DATABASE_URL":
             env.pop(key)
-    env.update({
-        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-        "SAML_TEST_POSTGRES": "1",
-        "SESSION_SECRET": "isolated-test-session-secret-not-for-production",
-        "FLAG_HASH_SECRET": "isolated-test-flag-secret-not-for-production",
-    })
+    env.update(
+        {
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+            "SAML_TEST_POSTGRES": "1",
+            "SESSION_SECRET": "isolated-test-session-secret-not-for-production",
+            "FLAG_HASH_SECRET": "isolated-test-flag-secret-not-for-production",
+        }
+    )
     with tempfile.TemporaryDirectory(prefix="saml-validation-") as directory:
         report = Path(directory) / "outcomes.json"
         try:
-            completed = subprocess.run(
+            # Re-runs this file with the current interpreter; no external input.
+            completed = subprocess.run(  # noqa: S603
                 [sys.executable, str(Path(__file__).resolve()), "--child", str(report)],
-                cwd=Path(__file__).resolve().parent, env=env,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                timeout=180, check=False,
+                cwd=Path(__file__).resolve().parent,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=180,
+                check=False,
             )
             result = json.loads(report.read_text())
         except subprocess.TimeoutExpired:
-            print("PostgreSQL validation FAILED: timeout; schema cleanup may need operator attention.")
+            print(
+                "PostgreSQL validation FAILED: timeout; schema cleanup may need operator attention."
+            )
             return 1
         except (OSError, ValueError):
             print("PostgreSQL validation FAILED: no valid outcome report; cleanup not confirmed.")
@@ -105,16 +119,22 @@ def main():
             statuses = []
             for phase in PHASES:
                 values = phases.get(phase, [])
-                status = values[0] if len(values) == 1 and values[0] in (
-                    "passed", "failed", "skipped"
-                ) else "missing-or-invalid"
+                status = (
+                    values[0]
+                    if len(values) == 1 and values[0] in ("passed", "failed", "skipped")
+                    else "missing-or-invalid"
+                )
                 statuses.append(f"{phase}={status}")
             print(f"{case}: " + ", ".join(statuses))
         passed = completed.returncode == 0 and successful(result)
-        print("PostgreSQL validation " + (
-            "PASSED: all three cases and their teardown passed."
-            if passed else "FAILED: requires exactly three cases, no skips, and successful teardown."
-        ))
+        print(
+            "PostgreSQL validation "
+            + (
+                "PASSED: all three cases and their teardown passed."
+                if passed
+                else "FAILED: requires exactly three cases, no skips, and successful teardown."
+            )
+        )
         return 0 if passed else 1
 
 
@@ -122,8 +142,19 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--child":
         import pytest
 
-        sys.exit(pytest.main([
-            "-p", "pytest_asyncio.plugin", "tests/test_saml_postgres.py",
-            "-q", "--tb=no", "--no-header", "-o", "addopts=",
-        ], plugins=[Results(Path(sys.argv[2]))]))
+        sys.exit(
+            pytest.main(
+                [
+                    "-p",
+                    "pytest_asyncio.plugin",
+                    "tests/test_saml_postgres.py",
+                    "-q",
+                    "--tb=no",
+                    "--no-header",
+                    "-o",
+                    "addopts=",
+                ],
+                plugins=[Results(Path(sys.argv[2]))],
+            )
+        )
     sys.exit(main())

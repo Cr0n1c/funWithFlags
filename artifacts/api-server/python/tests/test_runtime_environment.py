@@ -1,4 +1,5 @@
 """Sanitized startup contracts; no network, live trust material, or database."""
+
 import os
 
 import pytest
@@ -20,15 +21,18 @@ def isolated_environment(monkeypatch):
     get_settings.cache_clear()
 
 
-@pytest.mark.parametrize(("signals", "expected"), [
-    ({}, "development"),
-    ({"ENVIRONMENT": "development"}, "development"),
-    ({"ENVIRONMENT": "production"}, "production"),
-    ({"ENVIRONMENT": "test"}, "test"),
-    ({"NODE_ENV": "production"}, "production"),
-    ({"NODE_ENV": "test"}, "test"),
-    ({"ENVIRONMENT": "production", "NODE_ENV": "production"}, "production"),
-])
+@pytest.mark.parametrize(
+    ("signals", "expected"),
+    [
+        ({}, "development"),
+        ({"ENVIRONMENT": "development"}, "development"),
+        ({"ENVIRONMENT": "production"}, "production"),
+        ({"ENVIRONMENT": "test"}, "test"),
+        ({"NODE_ENV": "production"}, "production"),
+        ({"NODE_ENV": "test"}, "test"),
+        ({"ENVIRONMENT": "production", "NODE_ENV": "production"}, "production"),
+    ],
+)
 def test_all_startups_resolve_same_mode(monkeypatch, signals, expected):
     for key, value in signals.items():
         monkeypatch.setenv(key, value)
@@ -42,13 +46,16 @@ def test_all_startups_resolve_same_mode(monkeypatch, signals, expected):
     assert os.environ["SEED_ON_STARTUP"] == "false"
 
 
-@pytest.mark.parametrize("signals", [
-    {"ENVIRONMENT": "development", "NODE_ENV": "production"},
-    {"ENVIRONMENT": "production", "NODE_ENV": "development"},
-    {"ENVIRONMENT": "unknown-sensitive-value"},
-    {"ENVIRONMENT": ""},
-    {"NODE_ENV": "unknown-sensitive-value"},
-])
+@pytest.mark.parametrize(
+    "signals",
+    [
+        {"ENVIRONMENT": "development", "NODE_ENV": "production"},
+        {"ENVIRONMENT": "production", "NODE_ENV": "development"},
+        {"ENVIRONMENT": "unknown-sensitive-value"},
+        {"ENVIRONMENT": ""},
+        {"NODE_ENV": "unknown-sensitive-value"},
+    ],
+)
 def test_conflicts_fail_before_launch_without_values(monkeypatch, signals):
     for key, value in signals.items():
         monkeypatch.setenv(key, value)
@@ -60,16 +67,27 @@ def test_conflicts_fail_before_launch_without_values(monkeypatch, signals):
     assert "unknown-sensitive-value" not in str(launcher_error.value)
 
 
-@pytest.mark.parametrize("origin", [
-    "http://public.example.test", "https://localhost",
-    "https://APP.LOCALHOST.",
-    "https://127.0.0.1", "https://[::1]", "https://user:password@example.test",
-    "https://example.test/path", "https://example.test?query=1",
-    "https://example.test#fragment", "https://example.test:invalid",
-    "https://[broken",
-    "https://127.1.2.3", "https://[::ffff:127.0.0.1]", "https://10.0.0.1",
-    "https://example.test\n", "https://example.test\\other",
-])
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://public.example.test",
+        "https://localhost",
+        "https://APP.LOCALHOST.",
+        "https://127.0.0.1",
+        "https://[::1]",
+        "https://user:password@example.test",
+        "https://example.test/path",
+        "https://example.test?query=1",
+        "https://example.test#fragment",
+        "https://example.test:invalid",
+        "https://[broken",
+        "https://127.1.2.3",
+        "https://[::ffff:127.0.0.1]",
+        "https://10.0.0.1",
+        "https://example.test\n",
+        "https://example.test\\other",
+    ],
+)
 def test_production_origin_rejected_in_every_startup(monkeypatch, origin):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.setenv("APP_BASE_URL", origin)
@@ -100,10 +118,12 @@ def test_launcher_passes_resolved_settings_without_running_server(monkeypatch):
     monkeypatch.setenv("NODE_ENV", "production")
     monkeypatch.setenv("PORT", "8123")
     seen = {}
-    monkeypatch.setattr(run_server, "configure_logging",
-                        lambda settings: seen.update(mode=settings.environment))
-    monkeypatch.setattr(run_server.uvicorn, "run",
-                        lambda app, **kwargs: seen.update(app=app, **kwargs))
+    monkeypatch.setattr(
+        run_server, "configure_logging", lambda settings: seen.update(mode=settings.environment)
+    )
+    monkeypatch.setattr(
+        run_server.uvicorn, "run", lambda app, **kwargs: seen.update(app=app, **kwargs)
+    )
     run_server.main()
     assert seen["mode"] == "production"
     assert seen["app"] == "app.asgi:app"

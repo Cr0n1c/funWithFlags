@@ -30,16 +30,24 @@ class UserPointsResult(BaseModel):
 
 
 async def import_user_points(
-    db: AsyncSession, actor_id: int, body: UserPointsImport,
+    db: AsyncSession,
+    actor_id: int,
+    body: UserPointsImport,
 ) -> UserPointsResult:
     # Share the flag administration lock so challenge edits/deletions cannot
     # change the value between validation and commit. Preview reserves nothing.
     if not body.preview:
         await acquire_flag_mutation_lock(db)
-    query = select(User).where(or_(
-        func.lower(User.username) == body.user.lower(),
-        func.lower(func.trim(User.full_name)) == body.user.lower(),
-    )).limit(2)
+    query = (
+        select(User)
+        .where(
+            or_(
+                func.lower(User.username) == body.user.lower(),
+                func.lower(func.trim(User.full_name)) == body.user.lower(),
+            )
+        )
+        .limit(2)
+    )
     if not body.preview:
         query = query.with_for_update()
     users = (await db.scalars(query)).all()
@@ -54,11 +62,16 @@ async def import_user_points(
     if challenge is None:
         raise HTTPException(404, "Challenge not found. Import the challenge first.")
     if not challenge.is_active or challenge.category.lower() not in {
-        "gold", "owasp", "cracking", "talks", "intro",
+        "gold",
+        "owasp",
+        "cracking",
+        "talks",
+        "intro",
     }:
         raise HTTPException(409, "Only active Gold-track challenges can be awarded.")
     existing_query = select(Solve).where(
-        Solve.user_id == user.id, Solve.challenge_id == challenge.id,
+        Solve.user_id == user.id,
+        Solve.challenge_id == challenge.id,
     )
     existing = await db.scalar(existing_query)
     points_awarded = 0
@@ -67,8 +80,11 @@ async def import_user_points(
             # The unique (user, challenge) key also protects against a concurrent
             # normal flag submission, not just another administrator import.
             async with db.begin_nested():
-                db.add(Solve(user_id=user.id, challenge_id=challenge.id,
-                             points_awarded=challenge.points))
+                db.add(
+                    Solve(
+                        user_id=user.id, challenge_id=challenge.id, points_awarded=challenge.points
+                    )
+                )
                 await db.flush()
         except IntegrityError:
             existing = await db.scalar(existing_query)
@@ -76,18 +92,28 @@ async def import_user_points(
                 raise
         else:
             points_awarded = challenge.points
-            db.add(AuditLog(
-                user_id=actor_id, event_type="user_points_imported",
-                detail={"recipient_user_id": user.id, "challenge_id": challenge.id,
-                        "points": points_awarded, "personal_credit_only": True},
-            ))
+            db.add(
+                AuditLog(
+                    user_id=actor_id,
+                    event_type="user_points_imported",
+                    detail={
+                        "recipient_user_id": user.id,
+                        "challenge_id": challenge.id,
+                        "points": points_awarded,
+                        "personal_credit_only": True,
+                    },
+                )
+            )
             # A historical personal award does not establish past IdP group
             # membership. Never infer or backfill group credit from today's profile.
             await refresh_affected(db, {user.id}, set())
     return UserPointsResult(
-        user_id=user.id, display_name=user.full_name or user.username,
-        challenge=challenge.slug, title=challenge.title,
+        user_id=user.id,
+        display_name=user.full_name or user.username,
+        challenge=challenge.slug,
+        title=challenge.title,
         points=existing.points_awarded if existing else challenge.points,
-        points_awarded=points_awarded, already_awarded=existing is not None,
+        points_awarded=points_awarded,
+        already_awarded=existing is not None,
         preview=body.preview,
     )

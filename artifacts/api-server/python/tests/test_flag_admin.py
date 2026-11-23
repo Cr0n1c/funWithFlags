@@ -10,8 +10,9 @@ from sqlalchemy import func, select
 
 from app import crack_hashes
 from app.models import Challenge, GroupChallengeCredit, Solve
-from app.security import FLAG_DELETE_AUDIENCE
-from app.terminal_challenges import TERMINAL_CHALLENGES
+from app.security import FLAG_DELETE_AUDIENCE, hash_flag
+from app.talk_challenges import TALK_CHALLENGES
+from app.terminal_challenges import TERMINAL_CHALLENGES, metadata, prepare_terminal_challenges
 from tests.conftest import make_challenge, make_user, session_cookie
 
 
@@ -30,14 +31,28 @@ async def _member(session, *, username: str = "operator"):
 async def test_flag_backup_export_preview_and_atomic_import(client, settings, session):
     member = await _member(session)
     denied = await make_user(session, username="ordinary")
-    row = await make_challenge(session, settings, slug="backup-original", flag="CTF{offline}",
-                               hidden=True, is_active=False, sort_order=19, case_sensitive=True)
+    row = await make_challenge(
+        session,
+        settings,
+        slug="backup-original",
+        flag="CTF{offline}",
+        hidden=True,
+        is_active=False,
+        sort_order=19,
+        case_sensitive=True,
+    )
     headers = session_cookie(settings, member)
     assert (await client.get("/api/flag-admin/export-flags")).status_code == 401
-    assert (await client.post("/api/flag-admin/import-flags/preview", content=b"{}",
-                              headers={"Content-Type": "application/json"})).status_code == 401
-    assert (await client.get("/api/flag-admin/export-flags",
-                             headers=session_cookie(settings, denied))).status_code == 403
+    assert (
+        await client.post(
+            "/api/flag-admin/import-flags/preview",
+            content=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+    ).status_code == 401
+    assert (
+        await client.get("/api/flag-admin/export-flags", headers=session_cookie(settings, denied))
+    ).status_code == 403
     export = await client.get("/api/flag-admin/export-flags", headers=headers)
     assert export.status_code == 200
     assert export.headers["cache-control"] == "no-store"
@@ -48,23 +63,37 @@ async def test_flag_backup_export_preview_and_atomic_import(client, settings, se
     assert backup["key_id"] != settings.flag_hash_secret.get_secret_value()
     assert len(backup["challenges"]) == 1
     item = backup["challenges"][0]
-    assert set(item) == {"slug", "title", "category", "description", "points",
-                         "flag_hash", "case_sensitive", "is_active", "hidden", "sort_order"}
+    assert set(item) == {
+        "slug",
+        "title",
+        "category",
+        "description",
+        "points",
+        "flag_hash",
+        "case_sensitive",
+        "is_active",
+        "hidden",
+        "sort_order",
+    }
     assert item["flag_hash"] == row.flag_hash
     assert item["hidden"] is True and item["is_active"] is False
     assert str(row.id) not in item and "email" not in export.text
     preview_url = "/api/flag-admin/import-flags/preview"
     commit_url = "/api/flag-admin/import-flags"
     for path in (preview_url, commit_url):
-        assert (await client.post(path, json=backup,
-                                  headers=session_cookie(settings, denied))).status_code == 403
+        assert (
+            await client.post(path, json=backup, headers=session_cookie(settings, denied))
+        ).status_code == 403
         assert (await client.post(path, json=backup)).status_code == 401
 
     async def post(path, payload):
         return await client.post(path, json=payload, headers=headers)
 
     assert (await post(preview_url, backup)).json() == {
-        "missing": 0, "identical": 1, "conflicts": 0}
+        "missing": 0,
+        "identical": 1,
+        "conflicts": 0,
+    }
     assert (await post(commit_url, backup)).json() == {"created": 0, "identical": 1}
     new = {**item, "slug": "backup-new", "flag_hash": "a" * 64, "title": "New"}
     backup["challenges"].append(new)
@@ -72,8 +101,11 @@ async def test_flag_backup_export_preview_and_atomic_import(client, settings, se
     mismatched = {**backup, "key_id": "b" * 64}
     assert (await post(preview_url, mismatched)).status_code == 400
     assert (await post(commit_url, {**backup, "version": 2})).status_code == 400
-    for invalid in ({**backup, "extra": "SENSITIVE"}, {**backup, "challenges": [
-        {**item, "flag_hash": "SENSITIVE"}]}, {**backup, "challenges": [item, item]}):
+    for invalid in (
+        {**backup, "extra": "SENSITIVE"},
+        {**backup, "challenges": [{**item, "flag_hash": "SENSITIVE"}]},
+        {**backup, "challenges": [item, item]},
+    ):
         response = await post(preview_url, invalid)
         assert response.status_code in (400, 409)
         assert "SENSITIVE" not in response.text
@@ -83,8 +115,11 @@ async def test_flag_backup_export_preview_and_atomic_import(client, settings, se
         headers={**headers, "Content-Type": "application/json"},
     )
     assert repeated_key.status_code == 400 and "SENSITIVE" not in repeated_key.text
-    huge = await client.post(preview_url, content=json.dumps(backup).encode() + b" " * 1_048_576,
-                             headers={**headers, "Content-Type": "application/json"})
+    huge = await client.post(
+        preview_url,
+        content=json.dumps(backup).encode() + b" " * 1_048_576,
+        headers={**headers, "Content-Type": "application/json"},
+    )
     assert huge.status_code == 413
     conflict = {**backup, "challenges": [{**item, "points": item["points"] + 1}, new]}
     assert (await post(preview_url, conflict)).json()["conflicts"] == 1
@@ -105,14 +140,10 @@ async def test_flag_admin_access_is_narrow_and_exact(client, settings, session):
     assert (await client.get("/api/flag-admin/access")).status_code == 401
 
     legacy = await make_user(session, username="legacy", is_admin=True)
-    wrong_case = await make_user(
-        session, username="case", groups=["FunWithFlags-Admins"]
-    )
+    wrong_case = await make_user(session, username="case", groups=["FunWithFlags-Admins"])
     wrong_case.okta_sub = "saml:" + ("b" * 64)
     wrong_case.last_login_at = datetime.now(UTC)
-    forged = await make_user(
-        session, username="forged", groups=["funwithflags-admins"]
-    )
+    forged = await make_user(session, username="forged", groups=["funwithflags-admins"])
     forged.last_login_at = datetime.now(UTC)
     await session.commit()
 
@@ -125,26 +156,16 @@ async def test_flag_admin_access_is_narrow_and_exact(client, settings, session):
 
     member = await _member(session)
     assert (
-        await client.get(
-            "/api/flag-admin/access", headers=session_cookie(settings, member)
-        )
+        await client.get("/api/flag-admin/access", headers=session_cookie(settings, member))
     ).json() == {"allowed": True}
 
 
-async def test_hidden_flag_create_duplicate_preview_and_delete(
-    client, settings, session
-):
+async def test_hidden_flag_create_duplicate_preview_and_delete(client, settings, session):
     operator = await _member(session)
     other_operator = await _member(session, username="other-operator")
-    alpha = await make_user(
-        session, username="alpha-player", groups=["Shared", "Alpha"]
-    )
-    bravo = await make_user(
-        session, username="bravo-player", groups=["Shared", "Bravo"]
-    )
-    await make_challenge(
-        session, settings, slug="retained", flag="CTF{Retained}", points=100
-    )
+    alpha = await make_user(session, username="alpha-player", groups=["Shared", "Alpha"])
+    bravo = await make_user(session, username="bravo-player", groups=["Shared", "Bravo"])
+    await make_challenge(session, settings, slug="retained", flag="CTF{Retained}", points=100)
     operator_headers = session_cookie(settings, operator)
     payload = {
         "title": "Sensitive title",
@@ -154,14 +175,10 @@ async def test_hidden_flag_create_duplicate_preview_and_delete(
         "hidden": True,
     }
 
-    created = await client.post(
-        "/api/flag-admin/flags", json=payload, headers=operator_headers
-    )
+    created = await client.post("/api/flag-admin/flags", json=payload, headers=operator_headers)
     assert created.status_code == 201
     body = created.json()
-    assert set(body) == {
-        "slug", "title", "description", "points", "hidden", "category"
-    }
+    assert set(body) == {"slug", "title", "description", "points", "hidden", "category"}
     assert body["category"] == "gold"
     assert "flag" not in body
     assert "sensitive" not in body["slug"].lower()
@@ -188,17 +205,13 @@ async def test_hidden_flag_create_duplicate_preview_and_delete(
     personal_before = {
         row["username"]: (row["score"], row["solves"])
         for row in (
-            await client.get(
-                "/api/leaderboard", headers=session_cookie(settings, alpha)
-            )
+            await client.get("/api/leaderboard", headers=session_cookie(settings, alpha))
         ).json()
     }
     groups_before = {
         row["group_name"]: (row["score"], row["solves"])
         for row in (
-            await client.get(
-                "/api/leaderboard/groups", headers=session_cookie(settings, alpha)
-            )
+            await client.get("/api/leaderboard/groups", headers=session_cookie(settings, alpha))
         ).json()
     }
     assert personal_before == {
@@ -218,9 +231,7 @@ async def test_hidden_flag_create_duplicate_preview_and_delete(
     ).scalar_one()
     challenge.is_active = False
     await session.commit()
-    duplicate = await client.post(
-        "/api/flag-admin/flags", json=payload, headers=operator_headers
-    )
+    duplicate = await client.post("/api/flag-admin/flags", json=payload, headers=operator_headers)
     assert duplicate.status_code == 409
 
     preview = await client.post(
@@ -240,9 +251,7 @@ async def test_hidden_flag_create_duplicate_preview_and_delete(
     )
     assert wrong_user.status_code == 409
 
-    token_payload = jwt.decode(
-        token, options={"verify_signature": False}
-    )
+    token_payload = jwt.decode(token, options={"verify_signature": False})
     token_payload.update({"iat": int(time.time()) - 20, "exp": int(time.time()) - 10})
     expired_token = jwt.encode(
         token_payload,
@@ -293,9 +302,10 @@ async def test_hidden_flag_create_duplicate_preview_and_delete(
     )
     assert revoked.status_code == 403
     assert revoked.json() == {"detail": "Permission denied"}
-    assert await session.scalar(
-        select(func.count(Challenge.id)).where(Challenge.slug == body["slug"])
-    ) == 1
+    assert (
+        await session.scalar(select(func.count(Challenge.id)).where(Challenge.slug == body["slug"]))
+        == 1
+    )
 
     operator.groups = ["funwithflags-admins"]
     await session.commit()
@@ -318,17 +328,13 @@ async def test_hidden_flag_create_duplicate_preview_and_delete(
     personal_after = {
         row["username"]: (row["score"], row["solves"])
         for row in (
-            await client.get(
-                "/api/leaderboard", headers=session_cookie(settings, alpha)
-            )
+            await client.get("/api/leaderboard", headers=session_cookie(settings, alpha))
         ).json()
     }
     groups_after = {
         row["group_name"]: (row["score"], row["solves"])
         for row in (
-            await client.get(
-                "/api/leaderboard/groups", headers=session_cookie(settings, alpha)
-            )
+            await client.get("/api/leaderboard/groups", headers=session_cookie(settings, alpha))
         ).json()
     }
     assert personal_after == {
@@ -366,51 +372,63 @@ async def test_explicit_hash_import_authorization_submission_and_validation(
     monkeypatch, client, settings, session
 ):
     words = {name: f"offline-{name}-word" for name in ("easy", "medium", "hard")}
-    monkeypatch.setattr(crack_hashes, "PUZZLES", tuple(
-        (f"crack-the-hash-{name}", f"Crack The Hash: {name.title()}", points,
-         "MD5", hashlib.md5(words[name].encode()).hexdigest(), "")
-        for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
-    ))
+    monkeypatch.setattr(
+        crack_hashes,
+        "PUZZLES",
+        tuple(
+            (
+                f"crack-the-hash-{name}",
+                f"Crack The Hash: {name.title()}",
+                points,
+                "MD5",
+                hashlib.md5(words[name].encode()).hexdigest(),
+                "",
+            )
+            for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
+        ),
+    )
     endpoint = "/api/flag-admin/import-challenges"
     assert (await client.get("/api/flag-admin/import-hash-challenges")).status_code == 404
     assert (await client.get("/api/flag-admin/import-terminal-challenges")).status_code == 404
     assert (await client.post(endpoint, json=words)).status_code == 401
     assert (await client.get(endpoint)).status_code == 401
     ordinary = await make_user(session, username="ordinary", is_admin=True)
-    assert (await client.post(
-        endpoint, json=words, headers=session_cookie(settings, ordinary)
-    )).status_code == 403
+    assert (
+        await client.post(endpoint, json=words, headers=session_cookie(settings, ordinary))
+    ).status_code == 403
     denied = await client.get(endpoint, headers=session_cookie(settings, ordinary))
     assert denied.status_code == 403
     operator = await _member(session)
     headers = session_cookie(settings, operator)
-    terminal_missing = [p["slug"] for p in (await client.get(endpoint, headers=headers)).json()["terminal"]]
+    terminal_missing = [
+        p["slug"] for p in (await client.get(endpoint, headers=headers)).json()["terminal"]
+    ]
     payload = {**words, "terminal_missing": terminal_missing}
     assert (await client.post(endpoint, json=words, headers=headers)).status_code == 422
     invalid = await client.post(endpoint, json={**payload, "easy": "wrong"}, headers=headers)
     assert invalid.status_code == 400
     assert words["medium"] not in invalid.text
     secret = "DO-NOT-REFLECT-" + "x" * 4096
-    rejected = await client.post(
-        endpoint, json={**payload, "easy": secret}, headers=headers
-    )
+    rejected = await client.post(endpoint, json={**payload, "easy": secret}, headers=headers)
     assert rejected.status_code == 422
     assert secret not in rejected.text
     assert await session.scalar(select(func.count(Challenge.id))) == 0
     preview = (await client.get(endpoint, headers=headers)).json()["puzzles"]
     assert len(preview) == 3
     assert (await client.post(endpoint, json=payload, headers=headers)).json() == {
-        "created": 3 + len(TERMINAL_CHALLENGES), "unchanged": 0
+        "created": 3 + len(TERMINAL_CHALLENGES),
+        "unchanged": 0,
     }
     assert (await client.post(endpoint, json={"terminal_missing": []}, headers=headers)).json() == {
-        "created": 0, "unchanged": 3 + len(TERMINAL_CHALLENGES)
+        "created": 0,
+        "unchanged": 3 + len(TERMINAL_CHALLENGES),
     }
     assert (await client.post(endpoint, json=payload, headers=headers)).status_code == 409
     preview = (await client.get(endpoint, headers=headers)).json()["puzzles"]
     assert preview == []
-    medium = (await session.execute(select(Challenge).where(
-        Challenge.slug == "crack-the-hash-medium"
-    ))).scalar_one()
+    medium = (
+        await session.execute(select(Challenge).where(Challenge.slug == "crack-the-hash-medium"))
+    ).scalar_one()
     medium.title = "Edited by another operator"
     await session.commit()
     conflict = await client.post(endpoint, json=payload, headers=headers)
@@ -425,7 +443,8 @@ async def test_explicit_hash_import_authorization_submission_and_validation(
     player = await make_user(session, username="player")
     answer = hashlib.sha1(words["easy"].encode()).hexdigest().upper()
     submission = await client.post(
-        "/api/challenges/submit", json={"flag": answer},
+        "/api/challenges/submit",
+        json={"flag": answer},
         headers=session_cookie(settings, player),
     )
     assert submission.json()["points_awarded"] == 50
@@ -435,41 +454,66 @@ async def test_partial_hash_import_preserves_existing_answer_and_rejects_stale_p
     monkeypatch, client, settings, session
 ):
     words = {name: f"offline-{name}" for name in ("easy", "medium", "hard")}
-    monkeypatch.setattr(crack_hashes, "PUZZLES", tuple(
-        (f"crack-the-hash-{name}", f"Crack The Hash: {name.title()}", points,
-         "MD5", hashlib.md5(words[name].encode()).hexdigest(), "")
-        for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
-    ))
+    monkeypatch.setattr(
+        crack_hashes,
+        "PUZZLES",
+        tuple(
+            (
+                f"crack-the-hash-{name}",
+                f"Crack The Hash: {name.title()}",
+                points,
+                "MD5",
+                hashlib.md5(words[name].encode()).hexdigest(),
+                "",
+            )
+            for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
+        ),
+    )
     operator = await _member(session)
     headers = session_cookie(settings, operator)
     endpoint = "/api/flag-admin/import-challenges"
-    terminal_missing = [p["slug"] for p in (await client.get(endpoint, headers=headers)).json()["terminal"]]
-    assert (await client.post(endpoint, json={**words, "terminal_missing": terminal_missing}, headers=headers)).status_code == 200
-    easy = (await session.execute(select(Challenge).where(
-        Challenge.slug == "crack-the-hash-easy"
-    ))).scalar_one()
+    terminal_missing = [
+        p["slug"] for p in (await client.get(endpoint, headers=headers)).json()["terminal"]
+    ]
+    assert (
+        await client.post(
+            endpoint, json={**words, "terminal_missing": terminal_missing}, headers=headers
+        )
+    ).status_code == 200
+    easy = (
+        await session.execute(select(Challenge).where(Challenge.slug == "crack-the-hash-easy"))
+    ).scalar_one()
     old_id, old_hash, old_updated = easy.id, easy.flag_hash, easy.updated_at
-    hard = (await session.execute(select(Challenge).where(
-        Challenge.slug == "crack-the-hash-hard"
-    ))).scalar_one()
-    medium = (await session.execute(select(Challenge).where(
-        Challenge.slug == "crack-the-hash-medium"
-    ))).scalar_one()
+    hard = (
+        await session.execute(select(Challenge).where(Challenge.slug == "crack-the-hash-hard"))
+    ).scalar_one()
+    medium = (
+        await session.execute(select(Challenge).where(Challenge.slug == "crack-the-hash-medium"))
+    ).scalar_one()
     await session.delete(hard)
     await session.delete(medium)
     await session.commit()
     assert [p["slug"] for p in (await client.get(endpoint, headers=headers)).json()["puzzles"]] == [
-        "crack-the-hash-medium", "crack-the-hash-hard"
+        "crack-the-hash-medium",
+        "crack-the-hash-hard",
     ]
-    assert (await client.post(endpoint, json={**words, "terminal_missing": []}, headers=headers)).status_code == 409
-    stale = await client.post(endpoint, json={"medium": words["medium"], "terminal_missing": []}, headers=headers)
+    assert (
+        await client.post(endpoint, json={**words, "terminal_missing": []}, headers=headers)
+    ).status_code == 409
+    stale = await client.post(
+        endpoint, json={"medium": words["medium"], "terminal_missing": []}, headers=headers
+    )
     assert stale.status_code == 409
     result = await client.post(
-        endpoint, json={"medium": words["medium"], "hard": words["hard"], "terminal_missing": []}, headers=headers
+        endpoint,
+        json={"medium": words["medium"], "hard": words["hard"], "terminal_missing": []},
+        headers=headers,
     )
     assert result.json() == {"created": 2, "unchanged": 1 + len(TERMINAL_CHALLENGES)}
     assert (easy.id, easy.flag_hash, easy.updated_at) == (old_id, old_hash, old_updated)
-    stale = await client.post(endpoint, json={"hard": words["hard"], "terminal_missing": []}, headers=headers)
+    stale = await client.post(
+        endpoint, json={"hard": words["hard"], "terminal_missing": []}, headers=headers
+    )
     assert stale.status_code == 409
 
 
@@ -491,7 +535,9 @@ async def test_terminal_owasp_import_requires_exact_group_and_lists_distinct_obj
     assert len(puzzles) == len(TERMINAL_CHALLENGES)
     assert len({p["title"] for p in puzzles}) == len(TERMINAL_CHALLENGES)
     assert all(p["missing"] for p in puzzles)
-    assert (await client.post(endpoint, json={"terminal_missing": []}, headers=headers)).status_code == 409
+    assert (
+        await client.post(endpoint, json={"terminal_missing": []}, headers=headers)
+    ).status_code == 409
     result = await client.post(
         endpoint, json={"terminal_missing": [p["slug"] for p in puzzles]}, headers=headers
     )
@@ -509,8 +555,6 @@ async def test_terminal_owasp_import_requires_exact_group_and_lists_distinct_obj
     talks = [c for c in listing if c["category"] == "Talks"]
     assert len(talks) == 3
     assert all(c["points"] == 500 for c in talks)
-    from app.talk_challenges import TALK_CHALLENGES
-    from app.security import hash_flag
     for slug, title, description, flag in TALK_CHALLENGES:
         row = (await session.execute(select(Challenge).where(Challenge.slug == slug))).scalar_one()
         assert row.title == title and row.description == description
@@ -561,74 +605,101 @@ async def test_terminal_owasp_import_requires_exact_group_and_lists_distinct_obj
     source_row = next(c for c in owasp if c["slug"] == "everything-is-fair-game")
     assert source_row["title"] == "Everything is fair game"
     assert source_row["points"] == 25
-    assert source_row["description"] == "sometimes we all need a little help and ask our friend Claude to run in chrome"
+    assert (
+        source_row["description"]
+        == "sometimes we all need a little help and ask our friend Claude to run in chrome"
+    )
     source_solved = await client.post(
         "/api/challenges/submit",
-        json={"flag": "{everything_1$_fair_game}"}, headers=headers,
+        json={"flag": "{everything_1$_fair_game}"},
+        headers=headers,
     )
     assert source_solved.status_code == 200
     assert source_solved.json()["correct"] is True
     assert source_solved.json()["points_awarded"] == 25
     repeated = await client.post(
         "/api/challenges/submit",
-        json={"flag": "{everything_1$_fair_game}"}, headers=headers,
+        json={"flag": "{everything_1$_fair_game}"},
+        headers=headers,
     )
     assert repeated.json()["points_awarded"] == 0
-    stale = await client.post(endpoint, json={"terminal_missing": [puzzles[0]["slug"]]}, headers=headers)
+    stale = await client.post(
+        endpoint, json={"terminal_missing": [puzzles[0]["slug"]]}, headers=headers
+    )
     assert stale.status_code == 409
     assert (await client.get(endpoint, headers=headers)).json()["terminal"] == []
 
 
 async def test_one_import_includes_hashes_and_terminal_flags_atomically(
-    monkeypatch, client, settings, session,
+    monkeypatch,
+    client,
+    settings,
+    session,
 ):
     words = {name: f"offline-combined-{name}" for name in ("easy", "medium", "hard")}
-    monkeypatch.setattr(crack_hashes, "PUZZLES", tuple(
-        (f"crack-the-hash-{name}", f"Crack The Hash: {name.title()}", points,
-         "MD5", hashlib.md5(words[name].encode()).hexdigest(), "")
-        for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
-    ))
+    monkeypatch.setattr(
+        crack_hashes,
+        "PUZZLES",
+        tuple(
+            (
+                f"crack-the-hash-{name}",
+                f"Crack The Hash: {name.title()}",
+                points,
+                "MD5",
+                hashlib.md5(words[name].encode()).hexdigest(),
+                "",
+            )
+            for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
+        ),
+    )
     operator = await _member(session)
     headers = session_cookie(settings, operator)
     endpoint = "/api/flag-admin/import-challenges"
     preview = (await client.get(endpoint, headers=headers)).json()
     terminal_missing = [p["slug"] for p in preview["terminal"]]
     assert len(preview["puzzles"]) == 3 and len(terminal_missing) == len(TERMINAL_CHALLENGES)
-    assert (await client.post(
-        endpoint, json={**words, "terminal_missing": terminal_missing[:-1]}, headers=headers
-    )).status_code == 409
+    assert (
+        await client.post(
+            endpoint, json={**words, "terminal_missing": terminal_missing[:-1]}, headers=headers
+        )
+    ).status_code == 409
     assert await session.scalar(select(func.count(Challenge.id))) == 0
     result = await client.post(
         endpoint, json={**words, "terminal_missing": terminal_missing}, headers=headers
     )
     assert result.json() == {"created": 3 + len(TERMINAL_CHALLENGES), "unchanged": 0}
     assert (await client.get(endpoint, headers=headers)).json() == {
-        "puzzles": [], "terminal": [],
+        "puzzles": [],
+        "terminal": [],
     }
-    assert (await client.post(
-        endpoint, json={"terminal_missing": terminal_missing}, headers=headers
-    )).status_code == 409
+    assert (
+        await client.post(endpoint, json={"terminal_missing": terminal_missing}, headers=headers)
+    ).status_code == 409
     assert await session.scalar(select(func.count(Challenge.id))) == 3 + len(TERMINAL_CHALLENGES)
     # The normal command must proceed when hash puzzles exist but OWASP rows are absent.
-    terminal = (await session.execute(select(Challenge).where(
-        Challenge.slug == terminal_missing[0]
-    ))).scalar_one()
+    terminal = (
+        await session.execute(select(Challenge).where(Challenge.slug == terminal_missing[0]))
+    ).scalar_one()
     await session.delete(terminal)
     await session.commit()
     preview = (await client.get(endpoint, headers=headers)).json()
     assert preview["puzzles"] == []
     assert [p["slug"] for p in preview["terminal"]] == [terminal_missing[0]]
-    assert (await client.post(
-        endpoint, json={"terminal_missing": [terminal_missing[0]]}, headers=headers
-    )).json() == {"created": 1, "unchanged": 2 + len(TERMINAL_CHALLENGES)}
+    assert (
+        await client.post(
+            endpoint, json={"terminal_missing": [terminal_missing[0]]}, headers=headers
+        )
+    ).json() == {"created": 1, "unchanged": 2 + len(TERMINAL_CHALLENGES)}
 
 
 async def test_compliance_training_awards_50_points_once(client, settings, session):
-    from app.terminal_challenges import prepare_terminal_challenges
-
-    session.add_all(await prepare_terminal_challenges(
-        session, settings, {item[0] for item in TERMINAL_CHALLENGES},
-    ))
+    session.add_all(
+        await prepare_terminal_challenges(
+            session,
+            settings,
+            {item[0] for item in TERMINAL_CHALLENGES},
+        )
+    )
     await session.commit()
     player = await make_user(session, username="training-player")
     for expected_points in (50, 0):
@@ -643,24 +714,33 @@ async def test_compliance_training_awards_50_points_once(client, settings, sessi
 
 
 async def test_existing_terminal_flags_gain_only_missing_bash_history_challenge(
-    client, settings, session,
+    client,
+    settings,
+    session,
 ):
     operator = await _member(session)
     headers = session_cookie(settings, operator)
     for slug, title, description, flag in TERMINAL_CHALLENGES:
         if slug == "shell-bash-history-secret":
             continue
-        from app.terminal_challenges import metadata
         category, points = metadata(slug)
         row = await make_challenge(
-            session, settings, slug=slug, flag=flag, points=points,
+            session,
+            settings,
+            slug=slug,
+            flag=flag,
+            points=points,
         )
         row.title = title
         row.description = description
         row.category = category
     for slug, title, points, algorithm, digest, hint in crack_hashes.PUZZLES:
         row = await make_challenge(
-            session, settings, slug=slug, flag=f"existing-{slug}", points=points,
+            session,
+            settings,
+            slug=slug,
+            flag=f"existing-{slug}",
+            points=points,
         )
         row.title = title
         row.description = crack_hashes.puzzle_description(algorithm, digest, hint)
@@ -676,11 +756,14 @@ async def test_existing_terminal_flags_gain_only_missing_bash_history_challenge(
     assert [item["slug"] for item in preview["terminal"]] == ["shell-bash-history-secret"]
     # The normal import needs no hash words when those rows already exist.
     imported = await client.post(
-        endpoint, json={"terminal_missing": ["shell-bash-history-secret"]}, headers=headers,
+        endpoint,
+        json={"terminal_missing": ["shell-bash-history-secret"]},
+        headers=headers,
     )
     assert imported.status_code == 200
     assert imported.json() == {
-        "created": 1, "unchanged": len(TERMINAL_CHALLENGES) + len(crack_hashes.PUZZLES) - 1,
+        "created": 1,
+        "unchanged": len(TERMINAL_CHALLENGES) + len(crack_hashes.PUZZLES) - 1,
     }
     assert (await client.get(endpoint, headers=headers)).json()["terminal"] == []
     assert {
@@ -691,23 +774,39 @@ async def test_existing_terminal_flags_gain_only_missing_bash_history_challenge(
 
 
 async def test_combined_import_collision_rolls_back_all_missing_hashes(
-    monkeypatch, client, settings, session,
+    monkeypatch,
+    client,
+    settings,
+    session,
 ):
     words = {name: f"offline-collision-{name}" for name in ("easy", "medium", "hard")}
-    monkeypatch.setattr(crack_hashes, "PUZZLES", tuple(
-        (f"crack-the-hash-{name}", f"Crack The Hash: {name.title()}", points,
-         "MD5", hashlib.md5(words[name].encode()).hexdigest(), "")
-        for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
-    ))
-    operator = await _member(session)
-    await make_challenge(
-        session, settings, slug="other-flag", flag=TERMINAL_CHALLENGES[0][3]
+    monkeypatch.setattr(
+        crack_hashes,
+        "PUZZLES",
+        tuple(
+            (
+                f"crack-the-hash-{name}",
+                f"Crack The Hash: {name.title()}",
+                points,
+                "MD5",
+                hashlib.md5(words[name].encode()).hexdigest(),
+                "",
+            )
+            for name, points in (("easy", 50), ("medium", 150), ("hard", 400))
+        ),
     )
+    operator = await _member(session)
+    await make_challenge(session, settings, slug="other-flag", flag=TERMINAL_CHALLENGES[0][3])
     headers = session_cookie(settings, operator)
     endpoint = "/api/flag-admin/import-challenges"
     preview = (await client.get(endpoint, headers=headers)).json()
-    response = await client.post(endpoint, json={
-        **words, "terminal_missing": [p["slug"] for p in preview["terminal"]],
-    }, headers=headers)
+    response = await client.post(
+        endpoint,
+        json={
+            **words,
+            "terminal_missing": [p["slug"] for p in preview["terminal"]],
+        },
+        headers=headers,
+    )
     assert response.status_code == 409
     assert await session.scalar(select(func.count(Challenge.id))) == 1

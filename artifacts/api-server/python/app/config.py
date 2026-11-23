@@ -41,14 +41,19 @@ def public_https_origin(value: str, *, production: bool = False) -> bool:
         except ValueError:
             nonpublic_ip = False
         return bool(
-            origin.scheme == "https" and host and not origin.username
-            and not origin.password and not origin.path and not origin.query
-            and not origin.fragment and port != 0
+            origin.scheme == "https"
+            and host
+            and not origin.username
+            and not origin.password
+            and not origin.path
+            and not origin.query
+            and not origin.fragment
+            and port != 0
             and not any(c.isspace() or ord(c) < 32 or c == "\\" for c in value)
-            and (not production or (
-                host != "localhost" and not host.endswith(".localhost")
-                and not nonpublic_ip
-            ))
+            and (
+                not production
+                or (host != "localhost" and not host.endswith(".localhost") and not nonpublic_ip)
+            )
         )
     except ValueError:
         return False
@@ -69,7 +74,9 @@ def _split_csv(value: object) -> list[str]:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        extra="ignore", case_sensitive=False, hide_input_in_errors=True,
+        extra="ignore",
+        case_sensitive=False,
+        hide_input_in_errors=True,
     )
 
     # ------------------------------------------------------------------ general
@@ -101,7 +108,8 @@ class Settings(BaseSettings):
 
     # Competition opt-outs use stable identities, never names or admin roles.
     scoreboard_excluded_subjects: Annotated[list[str], NoDecode] = Field(
-        default_factory=list, repr=False,
+        default_factory=list,
+        repr=False,
     )
 
     # --------------------------------------------------------------- Okta SAML
@@ -142,8 +150,13 @@ class Settings(BaseSettings):
     run_migrations_on_startup: bool = False
     seed_on_startup: bool = False
 
-    @field_validator("cors_origins", "saml_admin_subjects", "scoreboard_excluded_subjects",
-                     "saml_required_attributes", mode="before")
+    @field_validator(
+        "cors_origins",
+        "saml_admin_subjects",
+        "scoreboard_excluded_subjects",
+        "saml_required_attributes",
+        mode="before",
+    )
     @classmethod
     def _csv(cls, value: object) -> list[str]:
         return _split_csv(value)
@@ -159,7 +172,8 @@ class Settings(BaseSettings):
     def _runtime_mode(cls, values: dict) -> dict:
         values = dict(values)
         values["environment"] = resolve_environment(
-            values.get("environment"), values.get("node_env", ""),
+            values.get("environment"),
+            values.get("node_env", ""),
         )
         return values
 
@@ -172,8 +186,12 @@ class Settings(BaseSettings):
                 raise ValueError("Production session cookies must be Secure")
         if self.local_dev_login:
             host = urlsplit(self.app_base_url).hostname
-            if (self.environment != "development" or host not in LOCAL_HOSTS
-                    or self.saml_idp_sso_url or self.saml_idp_entity_id):
+            if (
+                self.environment != "development"
+                or host not in LOCAL_HOSTS
+                or self.saml_idp_sso_url
+                or self.saml_idp_entity_id
+            ):
                 raise ValueError(
                     "LOCAL_DEV_LOGIN requires ENVIRONMENT=development, a localhost "
                     "APP_BASE_URL, and no SAML configuration"
