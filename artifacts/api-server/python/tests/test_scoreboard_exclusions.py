@@ -8,7 +8,9 @@ from app.scoreboard_projection import refresh_affected
 from tests.conftest import make_challenge, make_user, session_cookie
 
 
-def test_exclusion_configuration_accepts_csv():
+def test_exclusion_configuration_accepts_csv(monkeypatch):
+    monkeypatch.setenv("SESSION_SECRET", "unit-test-session-secret-that-is-long-enough-000")
+    monkeypatch.setenv("FLAG_HASH_SECRET", "unit-test-flag-hash-secret-that-is-long-enough-0")
     settings = Settings(scoreboard_excluded_subjects="subject:one, subject:two ")
     assert settings.scoreboard_excluded_subjects == ["subject:one", "subject:two"]
     assert "subject:one" not in repr(settings)
