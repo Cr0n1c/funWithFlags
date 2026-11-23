@@ -38,13 +38,13 @@ jobs:
           cache: npm
           cache-dependency-path: artifacts/fun-with-flags/package-lock.json
       - run: npm ci
-      - run: npm run lint
       - run: npm run type-check
       - run: npm test
       - run: npm run build
         env:
           PORT: "5173"
           BASE_PATH: /
+      - run: npm run lint
 
   api:
     name: API lint / test
