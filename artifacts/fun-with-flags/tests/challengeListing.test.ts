@@ -177,8 +177,9 @@ describe('bare challenge listing', () => {
       expect(fetchMock.mock.calls.slice(before).map(([url]) => url)).toEqual(['/api/challenges']);
       expect(prefix.textContent).toBe('hpux01$ ');
     }
-    expect(getAutocompleteSuggestions('challenges ')).toEqual([
-      'challenges cracking', 'challenges gold', 'challenges describe',
-    ]);
+    expect(['c', 'g', 'd'].flatMap(letter => getAutocompleteSuggestions(`challenges ${letter}`)))
+      .toEqual(['challenges cracking', 'challenges gold', 'challenges describe']);
+    expect(['b', 'r'].flatMap(letter => getAutocompleteSuggestions(`challenges ${letter}`)))
+      .toEqual([]);
   });
 });

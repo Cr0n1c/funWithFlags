@@ -6,6 +6,9 @@ const id = '/src/js/terminal/idleMatrix.ts';
 const settled = '\n      window.__matrixStatusSettled = (window.__matrixStatusSettled ?? 0) + 1;';
 const failed = `
         window.__matrixFailedCompletionWrites = (window.__matrixFailedCompletionWrites ?? 0) + 1;`;
+const installed = `
+        (window.__matrixRuntime ??= { installs: 0, heartbeats: 0 }).installs++;`;
+const heartbeat = ' window.__matrixRuntime.heartbeats++;';
 const ready = `
       window.__matrixStatusReady = true;
       (window.__matrixAppliedStatuses ??= []).push(solved);
@@ -25,6 +28,7 @@ it('instruments the current Matrix source without changing request ownership or 
   expect(wrapper).toBeGreaterThan(0);
   const restored = instrumented.slice(0, wrapper)
     .replace(settled, '').replace(ready, '').replace(failed, '')
+    .replace(installed, '').replace(heartbeat, '')
     .replace('async function observedStartMatrixTest()', 'export async function startMatrixTest()')
     .replace('import { getMatrixCompletion as requestMatrixCompletion }', 'import { getMatrixCompletion }');
   expect(restored === source).toBe(true);
